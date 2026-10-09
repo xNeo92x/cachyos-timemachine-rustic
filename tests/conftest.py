@@ -7,6 +7,16 @@ import pytest
 from timemachine.core import Engine, atomic
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "call" and report.failed:
+        fixture = item.funcargs.get("rustic_engine")
+        if fixture:
+            report.sections.append(("rustic test protocol", fixture[0].logs("test")))
+
+
 @pytest.fixture
 def configured(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-base"))

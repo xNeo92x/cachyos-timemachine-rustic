@@ -195,7 +195,9 @@ def ensure_service(config_dir=None, state_dir=None):
     log.chmod(0o600)
     process.setStandardOutputFile(str(log), QProcess.OpenModeFlag.Append)
     process.setStandardErrorFile(str(log), QProcess.OpenModeFlag.Append)
-    started, _ = process.startDetached()
+    started = process.startDetached()
+    if isinstance(started, tuple):
+        started = started[0]  # Qt/PySide versions differ in whether the PID is returned.
     if not started:
         return False
     loop = QEventLoop()
