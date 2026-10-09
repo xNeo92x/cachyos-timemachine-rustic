@@ -39,7 +39,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install native Plasma 6 runtime
-        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop plasma-integration kirigami kio-extras samba dbus libnotify ripgrep xorg-server-xvfb openbox
+        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop plasma-integration kirigami kio-extras kdialog xdotool sway wtype qt6-wayland samba dbus libnotify ripgrep xorg-server-xvfb openbox
       - uses: actions/checkout@v4
       - name: Click applet in a real Plasma shell on a virtual X11 display
         env:
@@ -63,6 +63,11 @@ jobs:
           PY
           openbox > /tmp/openbox.log 2>&1 &
           dbus-run-session -- bash tests/plasma_smoke.sh
+      - name: Open and accept KDE file choosers with a Wayland parent and child
+        run: |
+          useradd --create-home picker-test
+          chmod -R a+rX "$GITHUB_WORKSPACE"
+          runuser -u picker-test -- dbus-run-session -- bash tests/wayland_picker_smoke.sh
   nas:
     runs-on: ubuntu-24.04
     steps:

@@ -10,6 +10,7 @@ from PySide6.QtCore import ClassInfo, QEventLoop, QObject, QProcess, QProcessEnv
 from PySide6.QtDBus import QDBusConnection, QDBusMessage
 from PySide6.QtWidgets import QApplication
 
+from . import __version__
 from .core import Engine, Error
 from .gui import Window, date, human_size, status_text
 from .integration import (
@@ -54,6 +55,8 @@ class Bridge(QObject):
                     "destinations": rows,
                     "autostart": autostart_enabled(),
                     "open_requested": self.open_requested,
+                    "version": __version__,
+                    "platform": QApplication.platformName(),
                 }
             )
         except (Error, OSError, ValueError) as exc:
@@ -248,6 +251,9 @@ def request_popup(config_dir=None, state_dir=None):
 
 
 def main(config_dir=None, state_dir=None):
+    from .diagnostics import enable_diagnostics
+
+    enable_diagnostics(state_dir)
     app = QApplication([sys.argv[0]])
     app.setApplicationName("CachyOS Time Machine")
     app.setDesktopFileName("cachyos-time-machine")

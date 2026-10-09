@@ -1,5 +1,7 @@
 """Exercise native KDE Open/Save/Cancel buttons, including a real SMB directory."""
 
+import getpass
+import json
 import os
 import shutil
 import signal
@@ -12,9 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton
+from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
 from timemachine.core import Engine, atomic
 from timemachine.gui import Window
@@ -44,6 +46,7 @@ def main():
         smb_config = base / "smb.conf"
         smb_config.write_text(f"""[global]
 server role = standalone server
+smb ports = 1445
 interfaces = 127.0.0.1
 bind interfaces only = yes
 map to guest = Bad User
@@ -57,7 +60,7 @@ private dir = {samba}
 path = {share}
 guest ok = yes
 read only = no
-force user = root
+force user = {getpass.getuser()}
 """)
         with (base / "smbd.log").open("w") as log:
             server = subprocess.Popen(
@@ -71,7 +74,7 @@ force user = root
                         path.read_text(errors="replace") for path in [base / "smbd.log", *samba.glob("log.*")]
                     )
                     try:
-                        with socket.create_connection(("127.0.0.1", 445), timeout=0.2):
+                        with socket.create_connection(("127.0.0.1", 1445), timeout=0.2):
                             return True
                     except OSError:
                         return False
@@ -87,41 +90,82 @@ force user = root
                 errors = []
                 window.error = errors.append
 
-                for url in [QUrl.fromLocalFile(str(nas_folder)), QUrl("smb://guest@127.0.0.1/NAS/CachyOS%20Backup")]:
+                wayland = QApplication.platformName() == "wayland"
+                assert QApplication.platformName() in ("xcb", "wayland")
+
+                def chooser_visible(pid):
+                    if wayland:
+                        tree = json.loads(subprocess.check_output(["swaymsg", "-t", "get_tree"], text=True))
+                        def find(node):
+                            return node.get("pid") == pid or any(find(child) for child in node.get("nodes", []) + node.get("floating_nodes", []))
+                        return find(tree)
+                    result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(pid)], capture_output=True, text=True)
+                    return result.stdout.splitlines()
+
+                def keys(*sequence):
+                    if wayland:
+                        subprocess.run(["wtype", *sequence], check=True)
+                    else:
+                        raise AssertionError("Use X11 helper")
+
+                def choose(settings, value, directory=True):
+                    picker = settings.file_picker
+                    wait(lambda: chooser_visible(picker.process.processId()))
+                    if wayland:
+                        # The newly mapped child receives focus from Sway.
+                        keys("-M", "ctrl", "-k", "l", "-m", "ctrl", "--", value)
+                        keys("-k", "Return")
+                    else:
+                        wid = chooser_visible(picker.process.processId())[-1]
+                        subprocess.run(["xdotool", "windowactivate", "--sync", wid, "key", "--clearmodifiers", "ctrl+l"], check=True)
+                        subprocess.run(["xdotool", "type", "--clearmodifiers", "--", value], check=True)
+                        subprocess.run(["xdotool", "key", "--clearmodifiers", "Return"], check=True)
+                    # Location entry navigates to the directory, then Open accepts it.
+                    QTest.qWait(1500)
+                    if settings.file_picker is not None:
+                        if wayland:
+                            keys("-M", "alt", "-k", "o", "-m", "alt")
+                        else:
+                            subprocess.run(["xdotool", "key", "--clearmodifiers", "alt+o"], check=True)
+                    wait(lambda: settings.file_picker is None)
+                    assert not errors, errors
+                    assert settings.isVisible() and settings.isEnabled(), "Open closed Settings"
+
+                for value in [str(nas_folder), "smb://guest@127.0.0.1:1445/NAS/CachyOS%20Backup"]:
                     window.settings()
                     settings = window.settings_dialog
                     wait(settings.isVisible)
-                    settings.pick_repository(network=not url.isLocalFile())
-                    picker = settings.repository_dialog
-
-                    def native_dialog():
-                        return next((w for w in app.topLevelWidgets()
-                                     if w.isVisible() and w.metaObject().className() == "KDEPlatformFileDialog"), None)
-
-                    wait(native_dialog)
-                    native = native_dialog()
-                    picker.selectUrl(url)
-                    open_button = next(b for b in native.findChildren(QPushButton)
-                                       if b.text().replace("&", "") in ("Open", "Öffnen"))
-                    wait(open_button.isEnabled)
-                    QTest.qWait(500)
-                    QTest.mouseClick(open_button, Qt.MouseButton.LeftButton)
-                    wait(lambda: settings.repository_dialog is None)
-                    assert not errors, errors
-                    assert window.settings_dialog is settings and settings.isVisible(), "Open closed Settings"
-                    expected = url.toLocalFile() if url.isLocalFile() else url.toString(QUrl.FullyEncoded)
-                    assert settings.fields["repository"].text() == expected
-                    assert window.engine.dest("nas")["repository"] != expected, "Open saved prematurely"
-                    # Only the settings Save button commits and closes the parent dialog.
+                    settings.pick_repository(network=value.startswith("smb://"))
+                    choose(settings, value)
+                    assert window.settings_dialog is settings
+                    assert settings.fields["repository"].text() == value
+                    assert window.engine.dest("nas")["repository"] != value, "Open saved prematurely"
                     box = next(b for b in settings.findChildren(QDialogButtonBox) if b.parent() is settings)
                     QTest.mouseClick(box.button(QDialogButtonBox.StandardButton.Save), Qt.MouseButton.LeftButton)
                     wait(lambda: window.settings_dialog is None)
-                    assert window.engine.dest("nas")["repository"] == expected
+                    assert window.engine.dest("nas")["repository"] == value
                     window.settings()
-                    assert window.settings_dialog.fields["repository"].text() == expected
+                    assert window.settings_dialog.fields["repository"].text() == value
                     window.settings_dialog.reject()
                     app.processEvents()
-                print("KDE_NATIVE_LOCAL_AND_SMB_PICKER_OPEN_SAVE_REOPEN_OK", flush=True)
+                window.settings()
+                settings = window.settings_dialog
+                settings.pick_paths(settings.sources, directory=True)
+                choose(settings, str(nas_folder))
+                assert str(nas_folder) in settings.sources.toPlainText().splitlines()
+                file = nas_folder / "source file.txt"
+                file.write_text("source")
+                settings.pick_paths(settings.sources)
+                choose(settings, str(file), directory=False)
+                assert str(file) in settings.sources.toPlainText().splitlines()
+                settings.pick_paths(settings.excludes, directory=True, excluded=True)
+                choose(settings, str(nas_folder))
+                assert "!" + str(nas_folder) + "/**" in settings.excludes.toPlainText().splitlines()
+                settings.save()
+                window.settings()
+                assert str(file) in window.settings_dialog.sources.toPlainText().splitlines()
+                window.settings_dialog.reject()
+                print("KDE_NATIVE_LOCAL_AND_SMB_PICKER_OPEN_SAVE_REOPEN_OK platform=" + QApplication.platformName(), flush=True)
             finally:
                 if window is not None:
                     window.timer.stop()

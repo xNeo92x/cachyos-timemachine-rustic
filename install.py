@@ -63,7 +63,7 @@ def main():
         )
         return 0
     if importlib.util.find_spec("PySide6") is None or shutil.which("rustic") is None:
-        print("Bitte zuerst installieren: sudo pacman -Syu pyside6 rustic libnotify", file=sys.stderr)
+        print("Bitte zuerst installieren: sudo pacman -Syu pyside6 rustic libnotify kdialog", file=sys.stderr)
         return 1
     version = subprocess.run(["rustic", "--version"], text=True, capture_output=True, check=True).stdout
     import re
@@ -74,6 +74,8 @@ def main():
         return 1
     if not Path("/usr/share/dbus-1/services/org.kde.KIOFuse.service").exists():
         print("Für NAS-Freigaben bitte installieren: sudo pacman -S kio-fuse kio-extras")
+    if not shutil.which("kdialog"):
+        print("Für die Dateiauswahl bitte installieren: sudo pacman -S kdialog")
     root = Path(__file__).resolve().parent
     app_dir.mkdir(parents=True, exist_ok=True)
     shutil.copytree(

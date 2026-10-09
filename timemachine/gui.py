@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -53,6 +52,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .core import APP, RETENTION, Engine, Error, atomic, validate
+from .filepicker import FilePicker
 from .integration import autostart_enabled, set_autostart
 from .network import NetworkError, is_smb, mounted_url, smb_url
 from .schedule import ScheduleEditor
@@ -189,7 +189,7 @@ class Settings(QDialog):
         self.resize(780, 700)
         self.config = json.loads(json.dumps(window.engine.config))
         self.index = None
-        self.repository_dialog = None
+        self.file_picker = None
         self.browse_directory = str(Path.home())
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
@@ -325,14 +325,44 @@ class Settings(QDialog):
         )
         return row
 
+    def choose_paths(self, title, start, directory, selected):
+        if self.file_picker is not None:
+            return
+        picker = FilePicker()
+        self.file_picker = picker
+        self.setEnabled(False)
+
+        def completed(paths, error):
+            self.file_picker = None
+            if picker.cancelled:
+                return
+            self.setEnabled(True)
+            self.raise_()
+            self.activateWindow()
+            if error:
+                self.window.error(error)
+            elif paths:
+                selected(paths)
+
+        picker.completed.connect(completed)
+        picker.start(title, start, directory)
+
+    def done(self, result):
+        if self.file_picker is not None:
+            self.file_picker.cancel()
+        super().done(result)
+
     def pick_paths(self, editor, directory=False, excluded=False):
-        if directory:
-            path = QFileDialog.getExistingDirectory(self, "Ordner auswählen", self.browse_directory)
-            paths = [path] if path else []
-        else:
-            paths, _ = QFileDialog.getOpenFileNames(
-                self, "Dateien auswählen", self.browse_directory, "Alle Dateien (*)"
-            )
+        self.choose_paths(
+            "Ordner auswählen" if directory else "Dateien auswählen",
+            self.browse_directory, directory,
+            lambda paths: self.apply_paths(editor, paths, directory, excluded),
+        )
+
+    def apply_paths(self, editor, paths, directory=False, excluded=False):
+        if any(not Path(path).is_absolute() for path in paths):
+            self.window.error("Für Quellen und Ausschlüsse bitte lokale oder eingehängte Dateien und Ordner auswählen.")
+            return
         if not paths:
             return
         if any("\n" in path or "\r" in path for path in paths):
@@ -352,40 +382,20 @@ class Settings(QDialog):
         self.browse_directory = paths[-1] if directory else str(Path(paths[-1]).parent)
 
     def pick_repository(self, network=False):
-        if self.repository_dialog is not None:
-            self.repository_dialog.raise_()
-            self.repository_dialog.activateWindow()
-            return
         current = self.fields["repository"].text().strip()
         if is_smb(current):
-            start = QUrl(current)
+            start = current
         elif network:
-            start = QUrl("smb://")
+            start = "smb://"
         else:
-            path = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
-            start = QUrl.fromLocalFile(path)
-        # Keep ownership and acceptance separate from the settings dialog. Avoid a
-        # nested static exec() whose native KDE helper has its own modal event loop.
-        picker = QFileDialog(self)
-        picker.setWindowTitle("NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen")
-        picker.setFileMode(QFileDialog.FileMode.Directory)
-        picker.setOption(QFileDialog.Option.ShowDirsOnly)
-        picker.setSupportedSchemes(["file", "smb"])
-        picker.setDirectoryUrl(start)
-        self.repository_dialog = picker
-
-        def selected():
-            urls = picker.selectedUrls()
-            if urls:
-                self.apply_repository_url(urls[0])
-
-        def finished(_):
-            self.repository_dialog = None
-            picker.deleteLater()
-
-        picker.accepted.connect(selected)
-        picker.finished.connect(finished)
-        picker.open()
+            start = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
+        self.choose_paths(
+            "NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen",
+            start, True,
+            lambda paths: self.apply_repository_url(
+                QUrl.fromLocalFile(paths[0]) if Path(paths[0]).is_absolute() else QUrl(paths[0])
+            ),
+        )
 
     def apply_repository_url(self, selected):
         if selected.isEmpty():
@@ -1073,6 +1083,9 @@ class Window(QMainWindow):
 
 
 def main(config_dir=None, state_dir=None):
+    from .diagnostics import enable_diagnostics
+
+    enable_diagnostics(state_dir)
     app = QApplication([sys.argv[0]])
     app.setApplicationName("CachyOS Time Machine")
     app.setDesktopFileName(APP)

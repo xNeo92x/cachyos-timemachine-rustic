@@ -42,7 +42,7 @@ rustic und PySide6 sind in den Arch-/CachyOS-Paketquellen verfügbar.
 Der pacman-Paketname lautet **`pyside6`**; das Python-Modul heißt `PySide6`.
 
 ```bash
-sudo pacman -Syu pyside6 rustic libnotify git plasma-workspace kirigami kio-fuse kio-extras &&
+sudo pacman -Syu pyside6 rustic libnotify git plasma-workspace kirigami kio-fuse kio-extras kdialog &&
 git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
 cd cachyos-timemachine-rustic &&
 python install.py &&
@@ -384,8 +384,10 @@ lädt das echte Miniprogramm im KDE-Systemabschnitt einer vollständigen Plasma-
 auf einem virtuellen X11-Display. Er sendet echte Qt-Mausereignisse und prüft die
 Auswahl des Widgets, das sichtbare Popup, Schließen durch zweiten Klick und
 Tastaturaktivierung sowie das tatsächlich verwendete SVG-Bild.
-Eine vollständige CachyOS-/KDE-Wayland-Sitzung, echte NAS-/Cloud-Ziele und
-1Password stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.1
+Native Dateidialoge werden unter X11 und einem separaten Headless-Wayland-Compositor
+mit lokalen Dateien und einer echten Samba-Testfreigabe geprüft. Die konkrete
+CachyOS-/KDE-Wayland-Sitzung des Benutzers, reale NAS-/Cloud-Geräte und 1Password
+stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.1
 ergänzt zuverlässigen Sofortstart, Systemabschnitt-Migration und gebündelte Icons.
 Der native Test prüft explizit die Bereitschaft von Miniprogramm, Popup, D-Bus
 und SVG; ein bloß weiterlaufender Test-Viewer gilt nicht als erfolgreicher Start.
@@ -393,6 +395,22 @@ und SVG; ein bloß weiterlaufender Test-Viewer gilt nicht als erfolgreicher Star
 Das bisherige Qt-Hauptfenster bleibt bei Bedarf mit
 `cachyos-time-machine gui --window` zugänglich. Es ist nicht der Standardmodus.
 Die Tastaturkürzel des bisherigen Qt-Restore-Browsers gelten dort weiterhin.
+
+## Dateiauswahl und Absturzdiagnose
+
+Ab Version 0.2.6 laufen die nativen KDE-Dateidialoge für Quellen, Ausschlüsse und
+Repositories in eigenen `kdialog`-Prozessen. Sie können lokale Ordner und bei
+Repositories auch SMB-Freigaben auswählen. „Öffnen“ übernimmt die Auswahl in den
+Einstellungen; erst „Speichern“ schreibt die Konfiguration. Abbrechen oder ein
+Absturz des Dateidialogs verändert keine Eingaben und beendet den Dienst nicht.
+`kdialog` muss installiert sein; andernfalls erscheint ein Installationshinweis.
+
+Der Hintergrunddienst schreibt seine Version, Qt-/PySide-Versionen, Python-Fehler
+und native Absturzberichte auch bei D-Bus-Aktivierung nach
+`~/.local/state/cachyos-time-machine/desktop-service.log` (nur für deinen Benutzer
+lesbar). Falls erneut ein Problem auftritt, dieses Protokoll prüfen. Nach einem
+Update muss der bereits laufende Dienst durch Ab- und Anmeldung neu starten;
+der Start-Eintrag im Protokoll muss die neue Version anzeigen.
 
 ## Aktualisieren und Entfernen
 
