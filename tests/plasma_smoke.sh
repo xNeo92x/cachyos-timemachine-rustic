@@ -22,6 +22,8 @@ python install.py --no-panel --bin-dir "$task_dir/bin"
 python -m timemachine.cli configure
 # No manually pre-started service: reproduces the user's immediate post-install launch.
 python -m timemachine.cli gui
+# Exercise production dialog lifetimes with KDE's actual native helper, not a mocked picker.
+QT_QPA_PLATFORMTHEME=kde XDG_CURRENT_DESKTOP=KDE python tests/kde_picker_smoke.py
 cp -r plasma/org.cachyos.timemachine "$task_dir/applet"
 # Test-only readiness markers: a live viewer alone does not prove the applet loaded.
 python - "$task_dir/applet/contents/ui/main.qml" <<'PY'

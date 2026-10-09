@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QTime, QUrl
-from PySide6.QtWidgets import QApplication, QFileDialog, QPushButton
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QPushButton
 
 from timemachine.core import atomic
 from timemachine.gui import RestoreBrowser, Settings, Window
@@ -128,13 +128,16 @@ def test_file_picker_buttons_store_paths_and_cancel_without_changes(app, configu
     assert settings.sources.toPlainText().splitlines() == [str(source), *files]
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: folder)
     next(b for b in settings.findChildren(QPushButton) if b.text() == "Ordner auswählen …").click()
-    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", lambda *args: QUrl.fromLocalFile(repository))
+    monkeypatch.setattr(QFileDialog, "open", lambda self: None)
     settings.pick_repository()
+    picker = settings.repository_dialog
+    monkeypatch.setattr(picker, "selectedUrls", lambda: [QUrl.fromLocalFile(repository)])
+    picker.done(QDialog.DialogCode.Accepted)
     monkeypatch.setattr(QFileDialog, "getOpenFileNames", lambda *args: ([], ""))
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
-    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", lambda *args: QUrl())
     choose_files.click()
     settings.pick_repository()
+    settings.repository_dialog.reject()
     settings.save()
     window.reload()
     assert not errors
@@ -151,21 +154,21 @@ def test_nas_picker_opens_network_and_preserves_remote_url(app, configured, monk
     errors = []
     window.error = errors.append
     settings = Settings(window)
-    calls = []
     chosen = QUrl("smb://neo:private-password@nas.local/NAS/CachyOS Backup/")
-
-    def choose(*args):
-        calls.append(args)
-        return chosen
-
-    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", choose)
+    settings.show()
+    monkeypatch.setattr(QFileDialog, "open", lambda self: None)
     next(b for b in settings.findChildren(QPushButton) if b.text() == "NAS / Netzwerk …").click()
-    assert calls[-1][2].toString() == "smb://"
-    assert "smb" in calls[-1][4]
+    picker = settings.repository_dialog
+    assert "smb" in picker.supportedSchemes()
+    monkeypatch.setattr(picker, "selectedUrls", lambda: [chosen])
+    picker.done(QDialog.DialogCode.Accepted)
+    assert settings.isVisible()
+    assert settings.repository_dialog is None
+    assert engine.dest("test")["repository"] != settings.fields["repository"].text()
     assert settings.fields["repository"].text() == "smb://neo@nas.local/NAS/CachyOS%20Backup"
-    chosen = QUrl()
     settings.pick_repository()
-    assert calls[-1][2].toString().startswith("smb://neo@nas.local/")
+    settings.repository_dialog.reject()
+    assert settings.isVisible()
     settings.save()
     window.reload()
     assert not errors
@@ -173,6 +176,38 @@ def test_nas_picker_opens_network_and_preserves_remote_url(app, configured, monk
     assert "private-password" not in engine.config_path.read_text()
     window.timer.stop()
     window.tray.hide()
+    window.deleteLater()
+
+
+def test_settings_and_picker_acceptance_are_independent(app, configured, tmp_path, monkeypatch):
+    engine, _, _ = configured
+    window = Window(engine.config_dir, engine.state_dir, native_panel=True)
+    jobs = []
+    monkeypatch.setattr(window.jobs, "start", lambda *args: jobs.append(args))
+    monkeypatch.setattr(QFileDialog, "open", lambda self: None)
+    window.settings()
+    settings = window.settings_dialog
+    window.settings()
+    assert window.settings_dialog is settings
+    settings.pick_repository()
+    picker = settings.repository_dialog
+    settings.pick_repository()
+    assert settings.repository_dialog is picker
+    repository = str(tmp_path / "chosen backup")
+    monkeypatch.setattr(picker, "selectedUrls", lambda: [QUrl.fromLocalFile(repository)])
+    picker.done(QDialog.DialogCode.Accepted)
+    assert window.settings_dialog is settings and settings.isVisible()
+    assert not jobs
+    assert engine.dest("test")["repository"] != repository
+    settings.save()
+    assert window.settings_dialog is None
+    assert window.engine.dest("test")["repository"] == repository
+    assert len(jobs) == 1
+    window.settings()
+    assert window.settings_dialog.fields["repository"].text() == repository
+    window.settings_dialog.reject()
+    assert len(jobs) == 1
+    window.timer.stop()
     window.deleteLater()
 
 

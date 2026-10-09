@@ -170,6 +170,10 @@ und einen eigenen Backup-Ordner. Auch **Ordner auswählen …** erlaubt jetzt
 Netzwerkziele. Die Netzwerkadresse lässt sich bei Bedarf oben im Dialog öffnen,
 wenn die NAS in der automatischen Netzwerksuche nicht auftaucht.
 
+**Öffnen** übernimmt den Ordner in das Repository-Feld und lässt die
+Einstellungen geöffnet. Erst **Speichern** übernimmt die Konfiguration
+dauerhaft. **Abbrechen** im Ordnerdialog erhält den bisherigen Pfad.
+
 Beispiel: Der in Dolphin sichtbare Ordner
 `smb://neo@nas.local/NAS/CachyOS Backup/` wird dauerhaft als
 `smb://neo@nas.local/NAS/CachyOS%20Backup` gespeichert. Ein wechselnder lokaler

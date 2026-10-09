@@ -124,6 +124,7 @@ def tray_icon(color):
 
 def button(text, callback, icon=None):
     result = QPushButton(text)
+    result.setAutoDefault(False)
     if icon:
         result.setIcon(QIcon.fromTheme(icon))
     result.clicked.connect(callback)
@@ -188,6 +189,7 @@ class Settings(QDialog):
         self.resize(780, 700)
         self.config = json.loads(json.dumps(window.engine.config))
         self.index = None
+        self.repository_dialog = None
         self.browse_directory = str(Path.home())
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
@@ -296,6 +298,9 @@ class Settings(QDialog):
         av.addStretch()
         tabs.addTab(advanced, "Erweitert")
         box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        for action in box.buttons():
+            action.setAutoDefault(False)
+            action.setDefault(False)
         box.accepted.connect(self.save)
         box.rejected.connect(self.reject)
         layout.addWidget(box)
@@ -347,6 +352,10 @@ class Settings(QDialog):
         self.browse_directory = paths[-1] if directory else str(Path(paths[-1]).parent)
 
     def pick_repository(self, network=False):
+        if self.repository_dialog is not None:
+            self.repository_dialog.raise_()
+            self.repository_dialog.activateWindow()
+            return
         current = self.fields["repository"].text().strip()
         if is_smb(current):
             start = QUrl(current)
@@ -355,10 +364,30 @@ class Settings(QDialog):
         else:
             path = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
             start = QUrl.fromLocalFile(path)
-        selected = QFileDialog.getExistingDirectoryUrl(
-            self, "NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen",
-            start, QFileDialog.Option.ShowDirsOnly, ["file", "smb"]
-        )
+        # Keep ownership and acceptance separate from the settings dialog. Avoid a
+        # nested static exec() whose native KDE helper has its own modal event loop.
+        picker = QFileDialog(self)
+        picker.setWindowTitle("NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen")
+        picker.setFileMode(QFileDialog.FileMode.Directory)
+        picker.setOption(QFileDialog.Option.ShowDirsOnly)
+        picker.setSupportedSchemes(["file", "smb"])
+        picker.setDirectoryUrl(start)
+        self.repository_dialog = picker
+
+        def selected():
+            urls = picker.selectedUrls()
+            if urls:
+                self.apply_repository_url(urls[0])
+
+        def finished(_):
+            self.repository_dialog = None
+            picker.deleteLater()
+
+        picker.accepted.connect(selected)
+        picker.finished.connect(finished)
+        picker.open()
+
+    def apply_repository_url(self, selected):
         if selected.isEmpty():
             return
         try:
@@ -664,6 +693,7 @@ class Window(QMainWindow):
         self.rows = []
         self.last_menu = None
         self.dialogs = []
+        self.settings_dialog = None
         self.setWindowTitle("CachyOS Time Machine")
         self.setWindowIcon(tray_icon("#3daee9"))
         self.resize(900, 610)
@@ -915,13 +945,26 @@ class Window(QMainWindow):
             self.jobs.start([command, "--dest", name, "--json", *(extra or [])])
 
     def settings(self):
+        if self.settings_dialog is not None:
+            self.settings_dialog.raise_()
+            self.settings_dialog.activateWindow()
+            return
         if any(r.get("status") == "running" for r in self.rows):
             self.error("Bitte laufende Vorgänge zuerst abschließen oder abbrechen.")
             return
         dialog = Settings(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.reload()
-            self.jobs.start(["install"], self.timers_ready)
+        self.settings_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+        def finished(result):
+            self.settings_dialog = None
+            if result == QDialog.DialogCode.Accepted:
+                self.reload()
+                self.jobs.start(["install"], self.timers_ready)
+            dialog.deleteLater()
+
+        dialog.finished.connect(finished)
+        dialog.show()
 
     def restore(self, name=None):
         if isinstance(name, bool) or name is None:

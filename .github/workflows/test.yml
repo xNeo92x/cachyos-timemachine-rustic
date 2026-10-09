@@ -39,7 +39,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install native Plasma 6 runtime
-        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop kirigami dbus libnotify ripgrep xorg-server-xvfb openbox
+        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop plasma-integration kirigami kio-extras samba dbus libnotify ripgrep xorg-server-xvfb openbox
       - uses: actions/checkout@v4
       - name: Click applet in a real Plasma shell on a virtual X11 display
         env:
