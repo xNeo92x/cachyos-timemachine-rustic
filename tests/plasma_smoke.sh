@@ -33,9 +33,22 @@ text = text.replace('serviceError = "";', 'serviceError = ""; console.info("TIME
 probe = Path('tests/plasma_tray_probe.qml').read_text()
 text = text.replace('id: root', 'id: root\n' + probe, 1)
 p.write_text(text)
+# The system tray is an embedded containment, not a top-level desktop.
+# Give it a normal parent containment and configure its test-only package copy.
+import shutil
+tray = Path(sys.argv[1]).parents[3] / 'data/plasma/plasmoids/org.kde.plasma.systemtray'
+shutil.copytree('/usr/share/plasma/plasmoids/org.kde.plasma.systemtray', tray)
+main = tray / 'contents/ui/main.qml'
+source = main.read_text().replace('Component.onCompleted: {', '''Component.onCompleted: {
+        Plasmoid.configuration.extraItems = ["org.cachyos.timemachine"];
+        Plasmoid.configuration.shownItems = ["org.cachyos.timemachine"];
+''', 1)
+main.write_text(source)
+installed = tray.parent / 'org.cachyos.timemachine/contents/ui/main.qml'
+installed.write_text(text)
 PY
 set +e
-timeout 35s plasmoidviewer -c org.kde.plasma.systemtray -a "$task_dir/applet" -f horizontal -l bottomedge -s 800x80 > "$task_dir/plasma.log" 2>&1
+timeout 35s plasmoidviewer -a org.kde.plasma.systemtray -f horizontal -l bottomedge -s 800x80 > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
 cat "$task_dir/plasma.log"
@@ -43,6 +56,6 @@ cat "$task_dir/plasma.log"
 for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
-if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/applet/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then
+if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/(applet|data/plasma/plasmoids/org.cachyos.timemachine)/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then
   exit 1
 fi
