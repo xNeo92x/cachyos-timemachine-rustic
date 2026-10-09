@@ -14,9 +14,9 @@ Entwickelt und getestet mit rustic **0.11.4**.
 
 | Omarchy-Funktion | Umsetzung in CachyOS KDE |
 | --- | --- |
-| Ein Symbol in der Leiste | Qt 6 QSystemTrayIcon, von KDE als StatusNotifierItem im Systemabschnitt angezeigt |
+| Ein Symbol in der Leiste | Natives Plasma-6-Miniprogramm, direkt in der Leiste oder optional im Systemabschnitt |
 | Fehler-/Überfällig-Anzeige | Rotes Symbol, letzte erfolgreiche Sicherung separat gespeichert |
-| Panel und mehrere Ziele | Natives Qt-Fenster und Tray-Untermenü je Ziel |
+| Panel und mehrere Ziele | An der KDE-Leiste verankertes Plasma-Popup mit Zielauswahl |
 | Quellen als Pfad oder Liste | JSON `source`; fehlende Quellen brechen den gesamten Backup-Vorgang ab |
 | Geplante und manuelle Backups | systemd-Benutzertimer und dieselbe CLI für GUI/manuellen Aufruf |
 | Verschlüsselter Speicher | rustic-Repository mit Passwortdatei oder externem password_command |
@@ -24,15 +24,23 @@ Entwickelt und getestet mit rustic **0.11.4**.
 | Ausschlüsse | Native rustic-Globs, deren Vorzeichen sich von üblichen gitignore-Dateien unterscheiden |
 | Aufbewahrung | 7 tägliche, 4 wöchentliche, 12 monatliche, 3 jährliche Stände; `forget --prune` |
 | Vorbereitungs-/Fehler-Hooks | `pre_command` und `on_failure_command`, mit Zeitlimit |
-| Snapshot-Auswahl und Dateibrowser | Datum/ID, Ordnernavigation, Filter, Tastaturbedienung |
+| Snapshot-Auswahl und Dateibrowser | Browser im Plasma-Popup: Datum/ID, Ordnernavigation, Filter |
 | Restore ohne Überschreiben | Neuer privater Unterordner pro Vorgang unter `~/Restored` |
-| Benachrichtigung und Dateimanager | Freedesktop-Benachrichtigung; Aktion öffnet Ordner, GUI öffnet Ziel in Dolphin |
+| Benachrichtigung und Dateimanager | Freedesktop-Benachrichtigung; Aktion öffnet Ordner, Popup öffnet Ziel in Dolphin |
 | Protokoll, Integritätsprüfung, Testlauf | GUI/CLI; Protokolle 30 Tage, rustic check, rustic --dry-run |
 
-Es ist eine native KDE-Systemabschnitt-Anwendung, kein Omarchy-Plugin und kein
-separates QML-Plasmoid. Eine Quickshell-/Waybar-/Hyprland-Abhängigkeit gibt es nicht.
-Qt nutzt auf CachyOS die installierte KDE-Plattformintegration und das aktive
-Qt-Theme. Wayland-Fenster und StatusNotifier-Protokoll werden von Qt bereitgestellt.
+Ab Version 0.2.0 ist die Standardoberfläche ein natives Plasma-6-QML-Miniprogramm.
+Plasma übernimmt Popup-Verankerung, Theme, Skalierung und Wayland-Integration.
+Der Python-Dienst stellt eine schmale Sitzungs-D-Bus-Schnittstelle bereit;
+Repository-Zugriffe bleiben CLI-Unterprozesse außerhalb von plasmashell.
+Das optionale bisherige Qt-Hauptfenster ist mit `gui --window` erreichbar.
+Autostart ist ein benutzerspezifischer KDE-Desktop-Eintrag und im Popup schaltbar.
+Backup-Zeitpläne bleiben davon unabhängig. Quickshell/Waybar/Hyprland sind nicht nötig.
+
+KDE-Referenzen:
+- [Plasma 6 Portierung](https://develop.kde.org/docs/plasma/widget/porting_kf6/)
+- [Plasma-Scripting](https://develop.kde.org/docs/plasma/scripting/api/)
+- [Nativer QML-D-Bus-Client](https://github.com/KDE/plasma-workspace/tree/master/components/dbus)
 
 Wichtige Engine-Unterschiede:
 

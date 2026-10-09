@@ -20,6 +20,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -49,6 +50,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .core import APP, RETENTION, Engine, Error, atomic, validate
+from .integration import autostart_enabled, set_autostart
 
 
 def human_size(value):
@@ -186,6 +188,9 @@ class Settings(QDialog):
         layout.addWidget(tabs)
         basic = QWidget()
         form = QFormLayout(basic)
+        self.autostart = QCheckBox("Bei der KDE-Anmeldung automatisch starten")
+        self.autostart.setChecked(autostart_enabled())
+        form.addRow("Systemintegration", self.autostart)
         self.sources = QPlainTextEdit()
         source = self.config.get("source", "~")
         self.sources.setPlainText("\n".join([source] if isinstance(source, str) else source))
@@ -345,6 +350,11 @@ class Settings(QDialog):
                 self.excludes.toPlainText(),
             )
         except (Error, ValueError, OSError) as exc:
+            self.window.error(str(exc))
+            return
+        try:
+            set_autostart(self.autostart.isChecked())
+        except OSError as exc:
             self.window.error(str(exc))
             return
         self.accept()
@@ -540,8 +550,9 @@ class RestoreBrowser(QDialog):
 
 
 class Window(QMainWindow):
-    def __init__(self, config_dir=None, state_dir=None):
+    def __init__(self, config_dir=None, state_dir=None, native_panel=False):
         super().__init__()
+        self.native_panel = native_panel
         self.config_dir = Path(
             config_dir or Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / APP
         )
@@ -651,7 +662,8 @@ class Window(QMainWindow):
                 else None
             )
         )
-        self.tray.show()
+        if not native_panel:
+            self.tray.show()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(2000)
@@ -910,7 +922,7 @@ class Window(QMainWindow):
         QApplication.quit()
 
     def closeEvent(self, event):
-        if QSystemTrayIcon.isSystemTrayAvailable():
+        if self.native_panel or QSystemTrayIcon.isSystemTrayAvailable():
             event.ignore()
             self.hide()
         else:

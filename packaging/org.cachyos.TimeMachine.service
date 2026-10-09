@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.cachyos.TimeMachine
+Exec=/usr/bin/cachyos-time-machine service

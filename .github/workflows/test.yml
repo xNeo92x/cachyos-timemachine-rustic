@@ -15,7 +15,7 @@ jobs:
       - name: Install Qt runtime libraries for offscreen tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1 libopengl0 libxkbcommon0
+          sudo apt-get install -y libegl1 libgl1 libopengl0 libxkbcommon0 dbus-daemon
       - name: Install test dependencies
         run: python -m pip install 'PySide6==6.8.3' pytest ruff
       - name: Install tested rustic release
@@ -28,7 +28,18 @@ jobs:
           echo 'RUSTIC_TEST_BINARY=/tmp/rustic-bin/rustic' >> "$GITHUB_ENV"
       - name: Lint
         run: python -m ruff check timemachine tests install.py
+      - name: Parse Plasma QML syntax
+        run: pyside6-qmlformat -n plasma/org.cachyos.timemachine/contents/ui/main.qml > /tmp/timemachine.qml
       - name: Tests including real backup and restore
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q
+  plasma:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install native Plasma 6 runtime
+        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-sdk plasma-workspace plasma-desktop kirigami dbus libnotify ripgrep
+      - uses: actions/checkout@v4
+      - name: Load native applet and expand its popup
+        run: dbus-run-session -- bash tests/plasma_smoke.sh

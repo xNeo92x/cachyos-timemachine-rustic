@@ -24,7 +24,7 @@ def test_user_install_launcher_and_desktop_entries(tmp_path):
     )
     script = Path(__file__).resolve().parent.parent / "install.py"
     result = subprocess.run(
-        [sys.executable, str(script), "--bin-dir", str(tmp_path / "bin")],
+        [sys.executable, str(script), "--no-panel", "--bin-dir", str(tmp_path / "bin")],
         env=env,
         capture_output=True,
         text=True,
@@ -40,4 +40,16 @@ def test_user_install_launcher_and_desktop_entries(tmp_path):
     desktop = (tmp_path / "data/applications/cachyos-time-machine.desktop").read_text()
     autostart = (tmp_path / "config/autostart/cachyos-time-machine.desktop").read_text()
     assert str(launcher) in desktop
-    assert " gui --tray" in autostart
+    assert " service" in autostart and "Hidden=false" in autostart
+    assert (tmp_path / "data/plasma/plasmoids/org.cachyos.timemachine/contents/ui/main.qml").exists()
+    assert str(launcher) in (tmp_path / "data/dbus-1/services/org.cachyos.TimeMachine.service").read_text()
+    result = subprocess.run([str(launcher), "autostart", "disable"], env=env, capture_output=True, text=True)
+    assert result.returncode == 0
+    result = subprocess.run(
+        [sys.executable, str(script), "--no-panel", "--bin-dir", str(tmp_path / "bin")],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Hidden=true" in (tmp_path / "config/autostart/cachyos-time-machine.desktop").read_text()

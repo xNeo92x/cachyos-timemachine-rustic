@@ -1,11 +1,11 @@
 pkgname=cachyos-timemachine-rustic-git
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
 arch=('any')
 url='https://github.com/xNeo92x/cachyos-timemachine-rustic'
 license=('MIT')
-depends=('python' 'pyside6' 'rustic>=0.11.4' 'libnotify' 'systemd' 'xdg-utils')
+depends=('python' 'pyside6' 'rustic>=0.11.4' 'plasma-workspace>=6.3' 'kirigami' 'libnotify' 'systemd' 'xdg-utils')
 makedepends=('git')
 optdepends=('1password-cli: save repository passwords to a 1Password vault'
             'rclone: additional remote backends')
@@ -14,7 +14,7 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/cachyos-timemachine-rustic"
-  printf '0.1.0.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf '0.2.0.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {
@@ -30,6 +30,9 @@ EOF
   chmod 755 "$pkgdir/usr/bin/cachyos-time-machine"
   install -Dm644 packaging/cachyos-time-machine.desktop "$pkgdir/usr/share/applications/cachyos-time-machine.desktop"
   install -Dm644 packaging/cachyos-time-machine.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/cachyos-time-machine.svg"
+  install -Dm644 packaging/org.cachyos.TimeMachine.service "$pkgdir/usr/share/dbus-1/services/org.cachyos.TimeMachine.service"
+  install -d "$pkgdir/usr/share/plasma/plasmoids"
+  cp -r plasma/org.cachyos.timemachine "$pkgdir/usr/share/plasma/plasmoids/"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

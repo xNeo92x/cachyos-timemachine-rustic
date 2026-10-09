@@ -1,0 +1,19 @@
+{
+  "KPlugin": {
+    "Id": "org.cachyos.timemachine",
+    "Name": "CachyOS Time Machine",
+    "Description": "Encrypted rustic backups and file history directly in the KDE panel",
+    "Description[de]": "Verschlüsselte rustic-Backups und Dateiversionen direkt in der KDE-Leiste",
+    "Icon": "cachyos-time-machine",
+    "Category": "System Information",
+    "Authors": [{"Name": "CachyOS Time Machine contributors"}],
+    "License": "MIT",
+    "Version": "0.2.0",
+    "Website": "https://github.com/xNeo92x/cachyos-timemachine-rustic"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-NotificationArea": true,
+  "X-Plasma-NotificationAreaCategory": "SystemServices",
+  "X-Plasma-EnabledByDefault": false
+}

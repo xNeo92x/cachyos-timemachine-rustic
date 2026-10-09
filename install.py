@@ -11,11 +11,13 @@ import sys
 from pathlib import Path
 
 APP = "cachyos-time-machine"
+PLUGIN = "org.cachyos.timemachine"
 
 
 def main():
     parser = argparse.ArgumentParser(description="Install/update CachyOS Time Machine for the current user")
     parser.add_argument("--uninstall", action="store_true")
+    parser.add_argument("--no-panel", action="store_true", help="Do not modify the current Plasma panel")
     parser.add_argument(
         "--bin-dir", type=Path, default=Path.home() / ".local/bin", help="Custom launcher directory"
     )
@@ -27,7 +29,17 @@ def main():
     desktop = data / "applications" / (APP + ".desktop")
     autostart = config / "autostart" / (APP + ".desktop")
     units = config / "systemd/user"
+    plasmoid = data / "plasma/plasmoids" / PLUGIN
+    dbus_service = data / "dbus-1/services/org.cachyos.TimeMachine.service"
     if args.uninstall:
+        if not args.no_panel and importlib.util.find_spec("PySide6"):
+            from PySide6.QtCore import QCoreApplication
+
+            from timemachine.integration import integrate_panel
+
+            qt_app = QCoreApplication.instance() or QCoreApplication([])
+            integrate_panel(remove=True)
+            qt_app.processEvents()
         timers = [p.name for p in units.glob(APP + "-*.timer")]
         if timers:
             subprocess.run(["systemctl", "--user", "disable", "--now", *timers], check=True)
@@ -38,6 +50,9 @@ def main():
         launcher.unlink(missing_ok=True)
         desktop.unlink(missing_ok=True)
         autostart.unlink(missing_ok=True)
+        dbus_service.unlink(missing_ok=True)
+        if plasmoid.exists():
+            shutil.rmtree(plasmoid)
         icon = data / "icons/hicolor/scalable/apps" / (APP + ".svg")
         icon.unlink(missing_ok=True)
         if app_dir.exists():
@@ -99,15 +114,55 @@ def main():
     )
     desktop.parent.mkdir(parents=True, exist_ok=True)
     desktop.write_text(entry)
-    autostart.parent.mkdir(parents=True, exist_ok=True)
-    autostart.write_text(entry.replace(" gui\n", " gui --tray\n") + "X-KDE-autostart-after=panel\n")
+    from timemachine.integration import autostart_enabled, set_autostart
+
+    # Migrate the old tray autostart; preserve a disabled preference on updates.
+    enabled = autostart_enabled() if autostart.exists() else True
+    set_autostart(enabled, launcher)
+    package_tool = shutil.which("kpackagetool6")
+    if package_tool and not args.no_panel:
+        result = subprocess.run(
+            [
+                package_tool,
+                "--type",
+                "Plasma/Applet",
+                "--packageroot",
+                str(plasmoid.parent),
+                "--upgrade" if plasmoid.exists() else "--install",
+                str(root / "plasma" / PLUGIN),
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode:
+            print("KPackage: " + result.stderr.strip(), file=sys.stderr)
+            return 1
+    else:
+        shutil.copytree(root / "plasma" / PLUGIN, plasmoid, dirs_exist_ok=True)
+    dbus_service.parent.mkdir(parents=True, exist_ok=True)
+    dbus_service.write_text(
+        "[D-BUS Service]\nName=org.cachyos.TimeMachine\nExec=" + desktop_arg(launcher) + " service\n"
+    )
     icon_dir = data / "icons/hicolor/scalable/apps"
     icon_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / "packaging" / (APP + ".svg"), icon_dir)
     if shutil.which("update-desktop-database"):
         subprocess.run(["update-desktop-database", str(desktop.parent)], check=False)
+    if not args.no_panel:
+        from PySide6.QtCore import QCoreApplication
+
+        from timemachine.integration import integrate_panel
+
+        qt_app = QCoreApplication.instance() or QCoreApplication([])
+        if integrate_panel():
+            print("Plasma-Miniprogramm zur vorhandenen KDE-Leiste hinzugefügt (keine Duplikate).")
+        else:
+            print(
+                "Miniprogramm installiert. In KDE: Leiste bearbeiten → Miniprogramme hinzufügen → CachyOS Time Machine."
+            )
+        qt_app.processEvents()
     print("Installiert. Start: " + str(launcher))
-    print("Beim nächsten KDE-Login erscheint das Symbol im Systemabschnitt.")
+    print("Klick auf das Leisten-Symbol öffnet das native Plasma-Popup. Autostart ist dort schaltbar.")
     print("Vorhandene Zeitpläne nach einem Update neu schreiben: " + str(launcher) + " install")
     return 0
 

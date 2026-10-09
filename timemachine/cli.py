@@ -15,7 +15,12 @@ def parser():
     p.add_argument("--config-dir")
     p.add_argument("--state-dir")
     sub = p.add_subparsers(dest="command", required=True)
-    sub.add_parser("gui").add_argument("--tray", action="store_true")
+    gui = sub.add_parser("gui")
+    gui.add_argument("--tray", action="store_true", help="Compatibility alias for the session service")
+    gui.add_argument("--window", action="store_true", help="Open the optional classic Qt window")
+    sub.add_parser("service")
+    auto = sub.add_parser("autostart")
+    auto.add_argument("action", choices=["enable", "disable", "status"])
     sub.add_parser("configure")
     for cmd in ("status", "destinations"):
         sub.add_parser(cmd).add_argument("--json", action="store_true")
@@ -44,9 +49,25 @@ def main(argv=None):
     args = parser().parse_args(argv)
     try:
         if args.command == "gui":
-            from .gui import main as gui_main
+            if args.window:
+                from .gui import main as gui_main
 
-            return gui_main(args.config_dir, args.state_dir)
+                return gui_main(args.config_dir, args.state_dir)
+            from .service import main as service_main
+            from .service import request_popup
+
+            return service_main(args.config_dir, args.state_dir) if args.tray else request_popup()
+        if args.command == "service":
+            from .service import main as service_main
+
+            return service_main(args.config_dir, args.state_dir)
+        if args.command == "autostart":
+            from .integration import autostart_enabled, set_autostart
+
+            if args.action != "status":
+                set_autostart(args.action == "enable")
+            print(json.dumps({"ok": True, "enabled": autostart_enabled()}))
+            return 0
         if args.command == "configure":
             print(Engine.create_config(args.config_dir))
             return 0

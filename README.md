@@ -3,21 +3,22 @@
 Dateiversionen für CachyOS KDE, inspiriert von
 [Omarchy Time Machine](https://github.com/jankeesvw/omarchy-time-machine).
 Die gesamte Backup-Verarbeitung übernimmt **[rustic](https://github.com/rustic-rs/rustic)**.
-Die Oberfläche ist eine native **Qt-6-Anwendung** und integriert sich als
-**StatusNotifierItem im KDE-Systemabschnitt der Leiste**. Kein restic-Binary,
-keine Quickshell-, Omarchy- oder Hyprland-Abhängigkeit.
-
-![Qt-Oberfläche](docs/window.png)
-
-*Qt-Offscreen-Vorschau mit Beispieldaten. Unter KDE übernimmt das Fenster das aktive Theme.*
+Die Standardoberfläche ist ein **natives Plasma-6-Miniprogramm**: Ein Klick auf
+das Leisten-Symbol öffnet ein **an der KDE-Leiste verankertes Popup**. Status,
+Backups und der Snapshot-Dateibrowser erscheinen dort, ohne separates Hauptfenster.
+Plasma übernimmt Positionierung, Theme und Popup-Verhalten auch unter Wayland.
+Ein Python/PySide6-Dienst verbindet das Miniprogramm über den Sitzungs-D-Bus mit
+der rustic-CLI. Einstellungs-, Schlüssel- und Protokolldialoge bleiben Qt-Dialoge.
 
 ## Funktionen
 
 - Ein ruhiges Leisten-Symbol; rot bei Fehlern oder überfälligem Backup,
-  blau während eines Vorgangs, orange vor der Einrichtung.
+  blau während eines Vorgangs, orange vor der Einrichtung. Der Status erscheint als farbiger Punkt am Symbol.
 - Mehrere Ziele mit eigenen Zeitplänen, Schlüsseln, Status und Protokollen.
 - Automatische Sicherungen mit persistenten systemd-Benutzertimern und
-  manuelle Backups aus Fenster, Tray oder Terminal.
+  manuelle Backups aus dem Plasma-Popup oder Terminal.
+- Schaltbarer Autostart bei der KDE-Anmeldung, im Popup und in den Einstellungen.
+  KDE startet den Dienst bei Bedarf über D-Bus, auch wenn der Autostart aus ist.
 - Verschlüsselte, deduplizierte und inkrementelle Backups; jede Sicherung
   ist ein vollständig wiederherstellbarer Dateistand.
 - Lokale/externe Laufwerke, NAS, SFTP, S3, REST, rclone und weitere rustic-Backends.
@@ -33,12 +34,13 @@ keine Quickshell-, Omarchy- oder Hyprland-Abhängigkeit.
 
 ## Installation auf CachyOS KDE
 
-Benötigt Python >= 3.11, Qt/PySide6 >= 6.6 und **rustic >= 0.11.4**.
+Benötigt KDE **Plasma >= 6.3**, Kirigami, Python >= 3.11, Qt/PySide6 >= 6.6
+und **rustic >= 0.11.4**.
 rustic und PySide6 sind in den Arch-/CachyOS-Paketquellen verfügbar.
 Der pacman-Paketname lautet **`pyside6`**; das Python-Modul heißt `PySide6`.
 
 ```bash
-sudo pacman -Syu pyside6 rustic libnotify git &&
+sudo pacman -Syu pyside6 rustic libnotify git plasma-workspace kirigami &&
 git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
 cd cachyos-timemachine-rustic &&
 python install.py &&
@@ -46,15 +48,23 @@ python install.py &&
 ```
 
 Der Installer installiert für deinen Benutzer und benötigt selbst kein sudo.
-Er legt einen Menüeintrag und einen KDE-Autostart-Eintrag an. Beim nächsten Login
-startet die Anwendung direkt im Systemabschnitt. Fenster schließen blendet sie
-aus; **Beenden** im Tray-Menü beendet die Oberfläche. Bereits eingerichtete
-systemd-Zeitpläne laufen unabhängig davon weiter.
+Er legt das Plasma-Miniprogramm, einen Menüeintrag, die D-Bus-Aktivierung und
+einen KDE-Autostart-Eintrag an. In einer laufenden KDE-Sitzung fügt er das Symbol
+einmal zur vorhandenen Leiste hinzu. Deine übrige Leistenkonfiguration bleibt erhalten.
+Falls KDE die automatische Ergänzung nicht erlaubt: **Leiste bearbeiten →
+Miniprogramme hinzufügen → CachyOS Time Machine**. Bei erstmals installierten
+Miniprogrammen kann KDE eine erneute Anmeldung benötigen.
 
-Falls KDE das Symbol ausblendet: Rechtsklick auf den **Systemabschnitt** →
-**Systemabschnitt einrichten** → **Einträge** → **CachyOS Time Machine** →
-**Immer angezeigt**. Das Symbol nutzt die Textfarbe des aktiven Qt-Themes;
-Fenster und Bedienelemente übernehmen das KDE-/Qt-Theme.
+**Ein Klick auf das Symbol öffnet das Popup.** Es enthält Zielauswahl, Backup,
+Prüfung, Testlauf, Abbruch, Wiederherstellung und Zeitplanung. Der Schalter
+**Autostart bei KDE-Anmeldung** steuert den Hintergrunddienst. Ausschalten
+entfernt weder das Miniprogramm noch die unabhängigen systemd-Backup-Zeitpläne;
+der Dienst startet beim nächsten Zugriff des Miniprogramms bei Bedarf.
+Der Installer erhält den zuletzt gewählten Autostart-Zustand bei Updates.
+
+Alternativ kann das Miniprogramm im **Systemabschnitt → Einträge** aktiviert
+werden. Dann das zusätzlich in der Leiste platzierte Symbol entfernen, um nur
+einen Eintrag zu haben. Der alte Qt-Tray-Eintrag wird im Standardmodus nicht mehr erzeugt.
 
 Optional als Arch-Paket statt Benutzerinstallation:
 
@@ -63,18 +73,18 @@ cd packaging
 makepkg -si
 ```
 
-Bei Paketinstallation den Autostart über KDE **Systemeinstellungen → Autostart**
-hinzufügen (`cachyos-time-machine gui --tray`).
+Bei Paketinstallation das Miniprogramm hinzufügen oder `cachyos-time-machine gui`
+ausführen; Autostart im Popup einschalten.
 Das PKGBUILD ist im Repository enthalten; eine Veröffentlichung im AUR ist damit
 nicht verbunden.
 
 ## Erste Sicherung
 
-1. Im Fenster **Einstellungen** öffnen. Quellen und ein oder mehrere Ziele
+1. Im Popup **Einstellungen** öffnen. Quellen und ein oder mehrere Ziele
    festlegen. Der Starterpfad `CHANGE-ME` muss ersetzt werden.
 2. **Schlüssel → Schlüssel speichern**. Passwort zusätzlich außerhalb des PCs
    sichern, beispielsweise in einem Passwortmanager.
-3. **Repository initialisieren**, dann **Jetzt sichern**.
+3. Im Popup **Initialisieren**, dann **Jetzt sichern**.
 4. **Zeitpläne aktivieren**. Speichern der Einstellungen schreibt und aktiviert
    ebenfalls die Zeitpläne neu. Fehler dabei werden angezeigt.
 
@@ -206,8 +216,8 @@ Backup-Repositorys erzeugen.
 
 ### Zeitplanung und Aufbewahrung
 
-Nach manueller Änderung von `config.json` im Fenster **Neu laden** und
-**Zeitpläne aktivieren** wählen, oder `cachyos-time-machine install` ausführen.
+Änderungen an `config.json` erscheinen automatisch im Popup. Danach
+**Zeitpläne aktivieren** wählen oder `cachyos-time-machine install` ausführen.
 Die App merkt den zuletzt selbst gesetzten Aktivierungszustand; für außerhalb
 der App geänderte Timer ist `systemctl --user list-timers` maßgeblich.
 
@@ -227,9 +237,12 @@ unvollständiger Backup-Lauf; dann wird keine Aufbewahrung ausgeführt.
 
 ## Wiederherstellung
 
-**Dateien wiederherstellen** → Datum auswählen → Ordner öffnen → Datei oder
-Ordner wiederherstellen. Pfeile und Enter navigieren, Tippen filtert die Liste,
-`Ctrl+F` fokussiert den Filter, `Alt+Pfeil hoch` öffnet den übergeordneten Ordner.
+**Dateien wiederherstellen** öffnet den Browser im selben Popup. Datum auswählen,
+Ordner per Doppelklick öffnen, Datei auswählen und **Auswahl wiederherstellen**
+anklicken. **Diesen Ordner** stellt das aktuelle Verzeichnis wieder her.
+Pfadfeld, Nach-oben-Schaltfläche und Textfilter helfen beim Navigieren.
+Beim Datumswechsel bleibt der Pfad erhalten. Eine laufende Wiederherstellung
+lässt sich über **Zurück → Abbrechen** stoppen.
 
 Jeder Restore erzeugt einen eigenen privaten Ordner, beispielsweise:
 `~/Restored/2026-10-09_18-30-00_ab12cd34/home/eugen/Dokumente/datei.txt`.
@@ -242,6 +255,10 @@ zugehörigen Ordner. Die Dateien kannst du anschließend selbst zurück verschie
 Falls `~/.local/bin` noch nicht im PATH ist, die vollständige Programmadresse nutzen.
 
 ```bash
+cachyos-time-machine gui
+cachyos-time-machine autostart enable
+cachyos-time-machine autostart disable
+cachyos-time-machine autostart status
 cachyos-time-machine configure
 cachyos-time-machine key set --dest usb
 cachyos-time-machine init --dest usb
@@ -286,22 +303,36 @@ deine persönlichen Daten und Backups werden nicht verwendet.
 Getestet: echte lokale Repository-Initialisierung, inkrementelle Sicherung,
 Snapshot-Historie, Ordner-/Datei-Restore, Unicode-Dateinamen, Ausschlüsse, Testlauf,
 Prüfung, falsches Passwort, Abbruch, konkurrierende Zugriffe und Qt-Browserprozesse.
-Die GUI wurde im Qt-Offscreen-Modus geprüft. Eine vollständige CachyOS-/KDE-
-Wayland-Sitzung, echte NAS-/Cloud-Ziele und 1Password standen hier nicht für
-Integrationstests zur Verfügung. Version 0.1.0 ist eine erste Implementierung.
+Zusätzlich werden die D-Bus-Schnittstelle inklusive Backup/Browser/Restore und
+Autostart sowie die Plasma-QML-Syntax geprüft. Der separate Arch-Linux-CI-Job
+lädt das echte Miniprogramm mit Plasma 6 und öffnet dessen Popup im Offscreen-Modus.
+Eine vollständige CachyOS-/KDE-Wayland-Sitzung, echte NAS-/Cloud-Ziele und
+1Password stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.0
+ergänzt die native Plasma-Integration.
+
+Das bisherige Qt-Hauptfenster bleibt bei Bedarf mit
+`cachyos-time-machine gui --window` zugänglich. Es ist nicht der Standardmodus.
+Die Tastaturkürzel des bisherigen Qt-Restore-Browsers gelten dort weiterhin.
 
 ## Aktualisieren und Entfernen
 
 Für Benutzerinstallation: `git pull`, `python install.py`, anschließend
 `~/.local/bin/cachyos-time-machine install`, um Timer neu zu schreiben.
-Vor Aktualisierung die Oberfläche beenden und laufende Vorgänge abschließen.
+Vor dem Wechsel von 0.1.x die alte Anwendung im bisherigen Tray-Menü über
+**Beenden** schließen und laufende Vorgänge abschließen. Nach dem Update das neue
+Leisten-Symbol anklicken oder `cachyos-time-machine gui` starten. Bereits geladene
+Plasma-Miniprogramme übernehmen QML-Updates nach Entfernen/erneutem Hinzufügen
+oder bei der nächsten KDE-Anmeldung.
+
+`python install.py --no-panel` installiert ohne Änderung der laufenden Leiste.
 
 ```bash
 python install.py --uninstall
 ```
 
 Die Anwendung und ihre Timer werden entfernt. Konfiguration, Schlüssel,
-Protokolle und die Backup-Repositories bleiben erhalten. Ein manuell über KDE
-angelegter Autostart-Eintrag muss dort separat entfernt werden.
+Protokolle und die Backup-Repositories bleiben erhalten. Das automatisch hinzugefügte
+Leisten-Miniprogramm und der eigene Autostart-Eintrag werden entfernt. Manuell im
+Systemabschnitt aktivierte Einträge gegebenenfalls dort wieder deaktivieren.
 
 MIT. Herkunft und technische Portierungsdetails: [docs/UPSTREAM.md](docs/UPSTREAM.md).
