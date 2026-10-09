@@ -174,7 +174,7 @@ def main():
     print("Installiert. Start: " + str(launcher))
     print("Klick auf das Leisten-Symbol öffnet das native Plasma-Popup. Autostart ist dort schaltbar.")
     if updating:
-        print("Widget aktualisiert: Bitte einmal bei KDE ab- und wieder anmelden, damit Plasma die neue QML-Version lädt.")
+        print("Anwendung aktualisiert: Bitte einmal bei KDE ab- und wieder anmelden, damit Plasma und Hintergrunddienst die neue Version laden.")
     print("Vorhandene Zeitpläne nach einem Update neu schreiben: " + str(launcher) + " install")
     return 0
 

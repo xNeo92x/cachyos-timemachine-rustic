@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -38,6 +40,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QSplitter,
     QSystemTrayIcon,
@@ -51,6 +54,7 @@ from PySide6.QtWidgets import (
 from . import __version__
 from .core import APP, RETENTION, Engine, Error, atomic, validate
 from .integration import autostart_enabled, set_autostart
+from .schedule import ScheduleEditor
 
 
 def human_size(value):
@@ -183,6 +187,7 @@ class Settings(QDialog):
         self.resize(780, 700)
         self.config = json.loads(json.dumps(window.engine.config))
         self.index = None
+        self.browse_directory = str(Path.home())
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         layout.addWidget(tabs)
@@ -196,6 +201,7 @@ class Settings(QDialog):
         self.sources.setPlainText("\n".join([source] if isinstance(source, str) else source))
         self.sources.setMaximumHeight(85)
         form.addRow("Quellen (ein Pfad pro Zeile)", self.sources)
+        form.addRow(self.path_buttons(self.sources))
         self.destinations = QListWidget()
         self.destinations.setMaximumHeight(95)
         form.addRow("Backup-Ziele", self.destinations)
@@ -208,14 +214,21 @@ class Settings(QDialog):
             ("name", "Interner Name", "z. B. nas"),
             ("display_name", "Anzeigename", "z. B. Synology NAS"),
             ("repository", "Repository", "/run/media/…/rustic oder opendal:sftp"),
-            ("schedule", "Zeitplan", "*-*-* 03:00:00 · leer = nur manuell"),
             ("pre_command", "Vor Backup ausführen", "Optional: Laufwerk einhängen oder NAS wecken"),
             ("on_failure_command", "Bei Fehler ausführen", "Optionaler eigener Befehl"),
         ]:
             edit = QLineEdit()
             edit.setPlaceholderText(hint)
-            form.addRow(title, edit)
+            if key == "repository":
+                row = QHBoxLayout()
+                row.addWidget(edit)
+                row.addWidget(button("Ordner auswählen …", self.pick_repository, "folder-open"))
+                form.addRow(title, row)
+            else:
+                form.addRow(title, edit)
             self.fields[key] = edit
+        self.schedule = ScheduleEditor()
+        form.addRow("Zeitplan", self.schedule)
         self.options = QPlainTextEdit()
         self.options.setMaximumHeight(105)
         form.addRow("Backend-Optionen (JSON)", self.options)
@@ -224,7 +237,11 @@ class Settings(QDialog):
         )
         note.setWordWrap(True)
         form.addRow(note)
-        tabs.addTab(basic, "Quellen & Ziele")
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(basic)
+        tabs.addTab(scroll, "Quellen & Ziele")
         policies = QWidget()
         pf = QFormLayout(policies)
         self.retention = {}
@@ -247,6 +264,7 @@ class Settings(QDialog):
         exclude = window.config_dir / self.config.get("exclude_file", "excludes.txt")
         self.excludes.setPlainText(exclude.read_text() if exclude.exists() else "")
         pf.addRow("Ausschlüsse (rustic-Globs)", self.excludes)
+        pf.addRow(self.path_buttons(self.excludes, excluded=True))
         pf.addRow(
             QLabel(
                 "Beispiel: !.cache/   ·   !Downloads/   ·   !*.iso\n! schließt aus. Positive Muster schließen ein."
@@ -281,6 +299,58 @@ class Settings(QDialog):
         self.destinations.currentRowChanged.connect(self.select_dest)
         self.rebuild()
 
+    def path_buttons(self, editor, excluded=False):
+        row = QHBoxLayout()
+        row.addWidget(
+            button(
+                "Dateien ausschließen …" if excluded else "Dateien auswählen …",
+                lambda: self.pick_paths(editor, excluded=excluded),
+                "document-open",
+            )
+        )
+        row.addWidget(
+            button(
+                "Ordner ausschließen …" if excluded else "Ordner auswählen …",
+                lambda: self.pick_paths(editor, directory=True, excluded=excluded),
+                "folder-open",
+            )
+        )
+        return row
+
+    def pick_paths(self, editor, directory=False, excluded=False):
+        if directory:
+            path = QFileDialog.getExistingDirectory(self, "Ordner auswählen", self.browse_directory)
+            paths = [path] if path else []
+        else:
+            paths, _ = QFileDialog.getOpenFileNames(
+                self, "Dateien auswählen", self.browse_directory, "Alle Dateien (*)"
+            )
+        if not paths:
+            return
+        if any("\n" in path or "\r" in path for path in paths):
+            self.window.error("Pfade mit Zeilenumbrüchen werden in Pfad- und Musterlisten nicht unterstützt.")
+            return
+        lines = editor.toPlainText().splitlines()
+        for path in paths:
+            if excluded:
+                literal = re.sub(r"([\\*?\[\]{}!])", r"\\\1", path)
+                patterns = ["!" + literal]
+                if directory:
+                    patterns.append("!" + literal.rstrip("/") + "/**")
+            else:
+                patterns = [path]
+            lines.extend(pattern for pattern in patterns if pattern not in lines)
+        editor.setPlainText("\n".join(lines))
+        self.browse_directory = paths[-1] if directory else str(Path(paths[-1]).parent)
+
+    def pick_repository(self):
+        current = self.fields["repository"].text().strip()
+        start = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
+        path = QFileDialog.getExistingDirectory(self, "Backup-Repository auswählen", start)
+        if path:
+            self.fields["repository"].setText(path)
+            self.browse_directory = path
+
     def store_dest(self):
         if self.index is None or self.index >= len(self.config["destinations"]):
             return
@@ -291,6 +361,11 @@ class Settings(QDialog):
                 dest[key] = value
             else:
                 dest.pop(key, None)
+        schedule = self.schedule.schedule()
+        if schedule:
+            dest["schedule"] = schedule
+        else:
+            dest.pop("schedule", None)
         options = json.loads(self.options.toPlainText() or "{}")
         if options:
             dest["options"] = options
@@ -310,6 +385,7 @@ class Settings(QDialog):
         dest = self.config["destinations"][index]
         for key, edit in self.fields.items():
             edit.setText(dest.get(key, ""))
+        self.schedule.set_schedule(dest.get("schedule", ""))
         self.options.setPlainText(json.dumps(dest.get("options", {}), indent=2, ensure_ascii=False))
 
     def rebuild(self, index=0):

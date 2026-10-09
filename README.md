@@ -94,7 +94,12 @@ nicht verbunden.
 ## Erste Sicherung
 
 1. Im Popup **Einstellungen** öffnen. Quellen und ein oder mehrere Ziele
-   festlegen. Der Starterpfad `CHANGE-ME` muss ersetzt werden.
+   festlegen. Quellen lassen sich über **Dateien auswählen …** (Mehrfachauswahl)
+   und **Ordner auswählen …** hinzufügen. Beim Repository wählt **Ordner
+   auswählen …** ein lokales Ziel oder einen bereits eingehängten NAS-/USB-Ordner.
+   Im Dateidialog kann auch ein eigener Backup-Ordner angelegt werden. Der
+   Starterpfad `CHANGE-ME` muss ersetzt werden; Remote-Backends behalten ihr
+   Repository-Feld und die Backend-Optionen.
 2. **Schlüssel → Schlüssel speichern**. Passwort zusätzlich außerhalb des PCs
    sichern, beispielsweise in einem Passwortmanager.
 3. Im Popup **Initialisieren**, dann **Jetzt sichern**.
@@ -210,6 +215,11 @@ mehr Beispiele: [rustic-Konfigurationen](https://github.com/rustic-rs/rustic/tre
 
 ### Ausschlüsse
 
+Unter **Aufbewahrung & Ausschlüsse** öffnen **Dateien ausschließen …** und
+**Ordner ausschließen …** den Dateiexplorer. Die ausgewählten Pfade werden
+automatisch als Ausschlussmuster übernommen, einschließlich Unterordnern.
+Sonderzeichen in Namen werden maskiert; eigene Muster bleiben erhalten.
+
 `excludes.txt` verwendet **rustic-Globs**. Wichtig: `!` bedeutet hier **ausschließen**,
 positive Muster bedeuten **einschließen**. Positive Muster können alle anderen
 Dateien implizit ausschließen; beim Ausschließen daher das `!` nicht vergessen.
@@ -228,6 +238,14 @@ Sie sollen weder in die Sicherung geraten noch ein rekursives Backup des
 Backup-Repositorys erzeugen.
 
 ### Zeitplanung und Aufbewahrung
+
+Ab Version 0.2.3 wählst du den Zeitplan pro Backup-Ziel über die
+**Häufigkeit**: nur manuell, stündlich, täglich, wöchentlich, monatlich oder
+jährlich. Die passenden Regler für Uhrzeit, Minute, Wochentag, Monat und Tag
+werden eingeblendet. Uhrzeiten gelten in der lokalen Zeitzone. An nicht
+vorhandenen Monatstagen (z. B. 31. April) entfällt der Lauf; darauf weist der
+Dialog hin. Besondere vorhandene systemd-Zeitpläne erscheinen unter
+**Benutzerdefiniert** und bleiben beim Speichern anderer Einstellungen erhalten.
 
 Änderungen an `config.json` erscheinen automatisch im Popup. Danach
 **Zeitpläne aktivieren** wählen oder `cachyos-time-machine install` ausführen.
@@ -337,7 +355,9 @@ Die Tastaturkürzel des bisherigen Qt-Restore-Browsers gelten dort weiterhin.
 Für Benutzerinstallation: `git pull`, `python install.py`, anschließend
 `~/.local/bin/cachyos-time-machine install`, um Timer neu zu schreiben.
 Nach einem Update des Miniprogramms einmal bei KDE ab- und wieder anmelden,
-damit die laufende Plasma-Sitzung die neue QML-Version lädt.
+damit Plasma und der Hintergrunddienst die neue Version laden. Das gilt auch
+für geänderte Einstellungsdialoge, da bereits laufende Python-Prozesse ihre
+geladenen Module behalten.
 Vor dem Wechsel von 0.1.x die alte Anwendung im bisherigen Tray-Menü über
 **Beenden** schließen und laufende Vorgänge abschließen. Nach dem Update das neue
 Leisten-Symbol anklicken oder `cachyos-time-machine gui` starten. Bereits geladene
