@@ -30,25 +30,19 @@ import sys
 p = Path(sys.argv[1])
 text = p.read_text().replace('id: root', 'id: root\n    Component.onCompleted: console.info("TIMEMACHINE_APPLET_READY")', 1)
 text = text.replace('serviceError = "";', 'serviceError = ""; console.info("TIMEMACHINE_STATUS_READY");', 1)
-text = text.replace('fullRepresentation: ColumnLayout {', '''fullRepresentation: ColumnLayout {
-        Component.onCompleted: console.info("TIMEMACHINE_POPUP_READY")
-        Image {
-            visible: false
-            source: Qt.resolvedUrl("../icons/cachyos-time-machine.svg")
-            onStatusChanged: if (status === Image.Ready) console.info("TIMEMACHINE_ICON_READY")
-        }
-''', 1)
+probe = Path('tests/plasma_tray_probe.qml').read_text()
+text = text.replace('id: root', 'id: root\n' + probe, 1)
 p.write_text(text)
 PY
 set +e
-timeout 35s plasmoidviewer -a "$task_dir/applet" > "$task_dir/plasma.log" 2>&1
+timeout 35s plasmoidviewer -c org.kde.plasma.systemtray -a "$task_dir/applet" -f horizontal -l bottomedge -s 800x80 > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
 cat "$task_dir/plasma.log"
 [[ "$result" == 124 ]] # The applet must stay alive, rather than exit or crash.
-for marker in APPLET POPUP STATUS ICON; do
+for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
-if rg "file://$task_dir/applet/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then
+if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/applet/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then
   exit 1
 fi

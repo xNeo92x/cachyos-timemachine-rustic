@@ -55,7 +55,9 @@ Ein separat am rechten Leistenende platziertes Symbol aus Version 0.2.0 wird
 automatisch entfernt. Deine übrige Leistenkonfiguration bleibt erhalten.
 Falls KDE die automatische Ergänzung nicht erlaubt: **Systemabschnitt einrichten →
 Einträge → CachyOS Time Machine → Immer angezeigt**.
-Das SVG liegt direkt im Miniprogramm und benötigt keinen aktualisierten Icon-Cache.
+Das SVG wird direkt als Bild aus dem Miniprogramm geladen; der Icon-Theme-Cache
+wird dafür nicht verwendet. Nach einem Widget-Update bitte einmal bei KDE ab-
+und wieder anmelden: Plasma hält bereits geladene QML-Komponenten im Speicher.
 
 **Ein Klick auf das Symbol öffnet das Popup.** Es enthält Zielauswahl, Backup,
 Prüfung, Testlauf, Abbruch, Wiederherstellung und Zeitplanung. Der Schalter
@@ -316,7 +318,10 @@ Snapshot-Historie, Ordner-/Datei-Restore, Unicode-Dateinamen, Ausschlüsse, Test
 Prüfung, falsches Passwort, Abbruch, konkurrierende Zugriffe und Qt-Browserprozesse.
 Zusätzlich werden die D-Bus-Schnittstelle inklusive Backup/Browser/Restore und
 Autostart sowie die Plasma-QML-Syntax geprüft. Der separate Arch-Linux-CI-Job
-lädt das echte Miniprogramm mit Plasma 6 und öffnet dessen Popup im Offscreen-Modus.
+lädt das echte Miniprogramm im KDE-Systemabschnitt mit Plasma 6 im Offscreen-Modus.
+Er leitet Drücken/Klicken durch den echten KDE-Tray-Delegate und prüft die
+Auswahl des Widgets, das sichtbare Popup, Schließen durch zweiten Klick und
+Tastaturaktivierung sowie das tatsächlich verwendete SVG-Bild.
 Eine vollständige CachyOS-/KDE-Wayland-Sitzung, echte NAS-/Cloud-Ziele und
 1Password stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.1
 ergänzt zuverlässigen Sofortstart, Systemabschnitt-Migration und gebündelte Icons.
@@ -331,6 +336,8 @@ Die Tastaturkürzel des bisherigen Qt-Restore-Browsers gelten dort weiterhin.
 
 Für Benutzerinstallation: `git pull`, `python install.py`, anschließend
 `~/.local/bin/cachyos-time-machine install`, um Timer neu zu schreiben.
+Nach einem Update des Miniprogramms einmal bei KDE ab- und wieder anmelden,
+damit die laufende Plasma-Sitzung die neue QML-Version lädt.
 Vor dem Wechsel von 0.1.x die alte Anwendung im bisherigen Tray-Menü über
 **Beenden** schließen und laufende Vorgänge abschließen. Nach dem Update das neue
 Leisten-Symbol anklicken oder `cachyos-time-machine gui` starten. Bereits geladene

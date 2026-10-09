@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components as PC
@@ -193,9 +194,10 @@ PlasmoidItem {
         });
     }
 
-    Plasmoid.icon: Qt.resolvedUrl("../icons/cachyos-time-machine.svg").toString()
+    Plasmoid.icon: "view-history"
     Plasmoid.status: PlasmaCore.Types.ActiveStatus
-    preferredRepresentation: compactRepresentation
+    // Leave preferredRepresentation unset: SystemTrayState only hosts popups
+    // for applets without a forced representation.
     toolTipMainText: "CachyOS Time Machine"
     toolTipSubText: rows.length ? rows.map(r => r.display_name + ": " + r.status_text).join("\n") : "Verschlüsselte Backups mit rustic"
 
@@ -203,9 +205,13 @@ PlasmoidItem {
         implicitHeight: implicitWidth
         implicitWidth: Kirigami.Units.iconSizes.smallMedium
 
-        Kirigami.Icon {
+        Image {
+            objectName: "timeMachineTrayIcon"
             anchors.fill: parent
-            source: Plasmoid.icon
+            source: Qt.resolvedUrl("../icons/cachyos-time-machine.svg")
+            sourceSize.width: width * Screen.devicePixelRatio
+            sourceSize.height: height * Screen.devicePixelRatio
+            fillMode: Image.PreserveAspectFit
         }
         Rectangle {
             anchors.bottom: parent.bottom
@@ -217,9 +223,15 @@ PlasmoidItem {
             width: Kirigami.Units.smallSpacing * 2
         }
         MouseArea {
+            id: trayMouseArea
+            property bool wasExpanded: false
             anchors.fill: parent
+            hoverEnabled: true
 
-            onClicked: root.expanded = !root.expanded
+            // KDE forwards both handlers when clicking the hidden-items grid.
+            // Capture on press, before a popup may close on focus loss.
+            onPressed: wasExpanded = root.expanded
+            onClicked: root.expanded = !wasExpanded
         }
     }
     fullRepresentation: ColumnLayout {

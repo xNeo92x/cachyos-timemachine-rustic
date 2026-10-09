@@ -30,6 +30,7 @@ def main():
     autostart = config / "autostart" / (APP + ".desktop")
     units = config / "systemd/user"
     plasmoid = data / "plasma/plasmoids" / PLUGIN
+    updating = plasmoid.exists()
     dbus_service = data / "dbus-1/services/org.cachyos.TimeMachine.service"
     if args.uninstall:
         if not args.no_panel and importlib.util.find_spec("PySide6"):
@@ -172,6 +173,8 @@ def main():
         qt_app.processEvents()
     print("Installiert. Start: " + str(launcher))
     print("Klick auf das Leisten-Symbol öffnet das native Plasma-Popup. Autostart ist dort schaltbar.")
+    if updating:
+        print("Widget aktualisiert: Bitte einmal bei KDE ab- und wieder anmelden, damit Plasma die neue QML-Version lädt.")
     print("Vorhandene Zeitpläne nach einem Update neu schreiben: " + str(launcher) + " install")
     return 0
 

@@ -55,4 +55,5 @@ def test_user_install_launcher_and_desktop_entries(tmp_path):
         text=True,
     )
     assert result.returncode == 0
+    assert "ab- und wieder anmelden" in result.stdout
     assert "Hidden=true" in (tmp_path / "config/autostart/cachyos-time-machine.desktop").read_text()
