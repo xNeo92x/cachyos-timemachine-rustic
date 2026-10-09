@@ -9,7 +9,7 @@
     "Category": "System Information",
     "Authors": [{"Name": "CachyOS Time Machine contributors"}],
     "License": "MIT",
-    "Version": "0.2.3",
+    "Version": "0.2.4",
     "Website": "https://github.com/xNeo92x/cachyos-timemachine-rustic"
   },
   "KPackageStructure": "Plasma/Applet",

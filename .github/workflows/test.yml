@@ -63,3 +63,63 @@ jobs:
           PY
           openbox > /tmp/openbox.log 2>&1 &
           dbus-run-session -- bash tests/plasma_smoke.sh
+  nas:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install real SMB and KDE FUSE transport
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y samba kio-fuse kio-extras fuse3 dbus-daemon libegl1 libgl1 libopengl0 libxkbcommon0
+          sudo systemctl stop smbd nmbd
+          sudo modprobe fuse
+          sudo chmod a+rw /dev/fuse
+          python -m pip install 'PySide6==6.8.3'
+          curl -fL --retry 3 -o /tmp/rustic.tar.gz https://github.com/rustic-rs/rustic/releases/download/v0.11.4/rustic-v0.11.4-x86_64-unknown-linux-gnu.tar.gz
+          echo 'c20bc3682c6275de3cfbc9317101dca5c0800a2fb5c610d0f9ef2addfd27cf81  /tmp/rustic.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/rustic-bin
+          tar --no-same-owner -xzf /tmp/rustic.tar.gz -C /tmp/rustic-bin rustic
+      - name: Backup, check, restore and reconnect through a real NAS share
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          nas_test_dir=$(mktemp -d /tmp/timemachine-nas-XXXXXX)
+          chmod 755 "$nas_test_dir"
+          mkdir -p "$nas_test_dir/share/Repository space" "$nas_test_dir/samba"
+          cat > "$nas_test_dir/smb.conf" <<EOF
+          [global]
+          server role = standalone server
+          interfaces = 127.0.0.1
+          bind interfaces only = yes
+          map to guest = Bad User
+          log file = $nas_test_dir/samba/log.%m
+          pid directory = $nas_test_dir/samba
+          lock directory = $nas_test_dir/samba
+          state directory = $nas_test_dir/samba
+          cache directory = $nas_test_dir/samba
+          private dir = $nas_test_dir/samba
+          [Backups]
+          path = $nas_test_dir/share
+          guest ok = yes
+          read only = no
+          force user = $(id -un)
+          EOF
+          sudo /usr/sbin/smbd --foreground --no-process-group --configfile="$nas_test_dir/smb.conf" > "$nas_test_dir/smbd.log" 2>&1 &
+          nas_server_pid=$!
+          trap 'sudo kill "$nas_server_pid" || true' EXIT
+          python - <<'PY'
+          import socket, time
+          deadline = time.monotonic() + 10
+          while True:
+              try:
+                  with socket.create_connection(('127.0.0.1', 445), timeout=1):
+                      break
+              except OSError:
+                  if time.monotonic() > deadline:
+                      raise
+                  time.sleep(0.05)
+          PY
+          dbus-run-session -- python tests/nas_smoke.py "$nas_test_dir" /tmp/rustic-bin/rustic

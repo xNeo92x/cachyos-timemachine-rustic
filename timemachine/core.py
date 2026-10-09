@@ -19,6 +19,8 @@ import time
 import uuid
 from pathlib import Path, PurePosixPath
 
+from .network import NetworkError, is_smb, kio_mounts, repository_access, smb_url
+
 APP = "cachyos-time-machine"
 RETENTION = {"daily": 7, "weekly": 4, "monthly": 12, "yearly": 3}
 MAX_OUTPUT = 32 * 1024 * 1024
@@ -85,6 +87,11 @@ def validate(config):
         names.add(name)
         if not isinstance(dest.get("repository"), str) or not dest["repository"]:
             raise Error(f"Repository fehlt für {name}.")
+        if is_smb(dest["repository"]):
+            try:
+                dest["repository"] = smb_url(dest["repository"])
+            except NetworkError as exc:
+                raise Error(str(exc)) from exc
         if dest["repository"].startswith(("sftp:", "s3:", "b2:", "azure:", "gs:")):
             raise Error(
                 "restic-URLs werden nicht übernommen. Nutze opendal:sftp / opendal:s3 mit options oder rclone:remote:path."
@@ -352,7 +359,9 @@ class Engine:
         dest = self.dest(name)
         # Serialize writes across destinations pointing at the same repository.
         ident = dest["repository"]
-        if ":" not in ident:
+        if is_smb(ident):
+            ident = smb_url(ident, identity=True)
+        elif ":" not in ident:
             ident = str(expand(ident).resolve())
         # Credentials/options may vary for the same URL; serializing too broadly
         # is preferable to letting two local writers modify the same repository.
@@ -433,8 +442,8 @@ class Engine:
         env.update(dest.get("env", {}))
         return env
 
-    def _profile(self, dest):
-        repo = dest["repository"]
+    def _profile(self, dest, repository=None):
+        repo = repository or dest["repository"]
         if ":" not in repo:
             repo = str(expand(repo))
         lines = ["[repository]", "repository = " + json.dumps(repo, ensure_ascii=False)]
@@ -490,12 +499,30 @@ class Engine:
                     text = text.replace(secret, "***")
             return re.sub(r"(://)[^/@]+@", r"\1***@", text)
 
-        with tempfile.TemporaryDirectory(prefix="profile-", dir=self.folder(name)) as tmp:
+        with contextlib.ExitStack() as access:
+            tmp = access.enter_context(tempfile.TemporaryDirectory(prefix="profile-", dir=self.folder(name)))
             profile = Path(tmp) / "engine.toml"
+            inherited = ()
             if hook:
                 command = ["/bin/sh", "-c", hook]
             else:
-                atomic(profile, self._profile(dest))
+                repository = dest["repository"]
+                if is_smb(repository):
+                    try:
+                        repository, inherited = access.enter_context(repository_access(repository))
+                    except NetworkError as exc:
+                        raise Error(str(exc)) from exc
+                    if args and args[0] == "backup" and "--glob-file" in args:
+                        # Protect the NAS mount even when it was first connected by this process.
+                        globs = Path(args[args.index("--glob-file") + 1])
+                        patterns = globs.read_text()
+                        for _, root in kio_mounts():
+                            literal = re.sub(r"([\\*?\[\]{}!])", r"\\\1", str(root))
+                            patterns += "\n!" + literal + "\n!" + literal.rstrip("/") + "/**\n"
+                        atomic(globs, patterns)
+                if self.cancelled:
+                    raise Error("Vorgang abgebrochen.")
+                atomic(profile, self._profile(dest, repository))
                 binary = shutil.which(self.config.get("rustic_binary", "rustic"))
                 if not binary:
                     raise Error("rustic wurde nicht gefunden. Bitte rustic installieren.")
@@ -513,6 +540,7 @@ class Engine:
                 stderr=subprocess.PIPE,
                 env=env,
                 start_new_session=True,
+                pass_fds=inherited,
             )
             output = bytearray()
             tail = ""
@@ -666,6 +694,7 @@ class Engine:
                     Path.home() / "Restored",
                     Path.home() / ".cache/rustic",
                 ]
+                exclusions.extend(root for _, root in kio_mounts())
                 for destination in self.config["destinations"]:
                     if ":" not in destination["repository"]:
                         exclusions.append(expand(destination["repository"]).resolve())

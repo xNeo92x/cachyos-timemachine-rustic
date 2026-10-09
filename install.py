@@ -72,6 +72,8 @@ def main():
     if not match or tuple(map(int, match.groups())) < (0, 11, 4):
         print("rustic >= 0.11.4 erforderlich. Bitte System aktualisieren.", file=sys.stderr)
         return 1
+    if not Path("/usr/share/dbus-1/services/org.kde.KIOFuse.service").exists():
+        print("Für NAS-Freigaben bitte installieren: sudo pacman -S kio-fuse kio-extras")
     root = Path(__file__).resolve().parent
     app_dir.mkdir(parents=True, exist_ok=True)
     shutil.copytree(

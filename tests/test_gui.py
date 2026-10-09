@@ -6,7 +6,7 @@ import time
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QTime
+from PySide6.QtCore import QTime, QUrl
 from PySide6.QtWidgets import QApplication, QFileDialog, QPushButton
 
 from timemachine.core import atomic
@@ -128,10 +128,11 @@ def test_file_picker_buttons_store_paths_and_cancel_without_changes(app, configu
     assert settings.sources.toPlainText().splitlines() == [str(source), *files]
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: folder)
     next(b for b in settings.findChildren(QPushButton) if b.text() == "Ordner auswählen …").click()
-    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: repository)
+    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", lambda *args: QUrl.fromLocalFile(repository))
     settings.pick_repository()
     monkeypatch.setattr(QFileDialog, "getOpenFileNames", lambda *args: ([], ""))
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
+    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", lambda *args: QUrl())
     choose_files.click()
     settings.pick_repository()
     settings.save()
@@ -139,6 +140,37 @@ def test_file_picker_buttons_store_paths_and_cancel_without_changes(app, configu
     assert not errors
     assert window.engine.config["source"] == [str(source), *files, folder]
     assert window.engine.config["destinations"][0]["repository"] == repository
+    window.timer.stop()
+    window.tray.hide()
+    window.deleteLater()
+
+
+def test_nas_picker_opens_network_and_preserves_remote_url(app, configured, monkeypatch):
+    engine, _, _ = configured
+    window = Window(engine.config_dir, engine.state_dir)
+    errors = []
+    window.error = errors.append
+    settings = Settings(window)
+    calls = []
+    chosen = QUrl("smb://neo:private-password@nas.local/NAS/CachyOS Backup/")
+
+    def choose(*args):
+        calls.append(args)
+        return chosen
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectoryUrl", choose)
+    next(b for b in settings.findChildren(QPushButton) if b.text() == "NAS / Netzwerk …").click()
+    assert calls[-1][2].toString() == "smb://"
+    assert "smb" in calls[-1][4]
+    assert settings.fields["repository"].text() == "smb://neo@nas.local/NAS/CachyOS%20Backup"
+    chosen = QUrl()
+    settings.pick_repository()
+    assert calls[-1][2].toString().startswith("smb://neo@nas.local/")
+    settings.save()
+    window.reload()
+    assert not errors
+    assert window.engine.dest("test")["repository"] == "smb://neo@nas.local/NAS/CachyOS%20Backup"
+    assert "private-password" not in engine.config_path.read_text()
     window.timer.stop()
     window.tray.hide()
     window.deleteLater()

@@ -22,6 +22,8 @@ der rustic-CLI. Einstellungs-, Schlüssel- und Protokolldialoge bleiben Qt-Dialo
 - Verschlüsselte, deduplizierte und inkrementelle Backups; jede Sicherung
   ist ein vollständig wiederherstellbarer Dateistand.
 - Lokale/externe Laufwerke, NAS, SFTP, S3, REST, rclone und weitere rustic-Backends.
+- NAS-Ordner über den KDE-Netzwerkdialog auswählen; SMB-Adressen werden vor
+  jedem Zugriff automatisch über KIO FUSE verbunden, auch bei geplanten Backups.
 - Eine oder mehrere Quellen, Ausschlussmuster und konfigurierbare Aufbewahrung.
 - Fortschritt, Abbruch, Integritätsprüfung, Testlauf und Offline-Statusanzeige.
 - Snapshot-Browser mit Datumsauswahl, Verzeichnisnavigation und Textfilter.
@@ -40,7 +42,7 @@ rustic und PySide6 sind in den Arch-/CachyOS-Paketquellen verfügbar.
 Der pacman-Paketname lautet **`pyside6`**; das Python-Modul heißt `PySide6`.
 
 ```bash
-sudo pacman -Syu pyside6 rustic libnotify git plasma-workspace kirigami &&
+sudo pacman -Syu pyside6 rustic libnotify git plasma-workspace kirigami kio-fuse kio-extras &&
 git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
 cd cachyos-timemachine-rustic &&
 python install.py &&
@@ -160,6 +162,44 @@ Dateibackup mit Versionshistorie, kein bootfähiges Systemabbild.
 Eigene Hook-Befehle werden ausdrücklich über `/bin/sh -c` als dein Benutzer
 ausgeführt. Ein Testlauf führt keine Hooks aus und schreibt keinen Snapshot.
 
+### NAS über SMB (Dolphin / KDE Netzwerk)
+
+In **Einstellungen → Quellen & Ziele → NAS / Netzwerk …** öffnet sich der
+native KDE-Ordnerdialog direkt im SMB-Netzwerk. Wähle deine NAS, die Freigabe
+und einen eigenen Backup-Ordner. Auch **Ordner auswählen …** erlaubt jetzt
+Netzwerkziele. Die Netzwerkadresse lässt sich bei Bedarf oben im Dialog öffnen,
+wenn die NAS in der automatischen Netzwerksuche nicht auftaucht.
+
+Beispiel: Der in Dolphin sichtbare Ordner
+`smb://neo@nas.local/NAS/CachyOS Backup/` wird dauerhaft als
+`smb://neo@nas.local/NAS/CachyOS%20Backup` gespeichert. Ein wechselnder lokaler
+KIO-Mount-Pfad wird nicht in der Konfiguration gespeichert.
+
+```json
+{
+  "name": "nas",
+  "display_name": "NAS",
+  "repository": "smb://neo@nas.local/NAS/CachyOS%20Backup",
+  "schedule": "*-*-* 03:00:00"
+}
+```
+
+Benötigt **kio-fuse** und **kio-extras** sowie eine laufende KDE-Benutzersitzung.
+Öffne die Freigabe zunächst in Dolphin und speichere die NAS-Anmeldedaten in
+**KDE Wallet**, damit geplante Sicherungen ohne Passwortdialog funktionieren.
+Das NAS-Anmeldepasswort und der separate Verschlüsselungsschlüssel für rustic
+sind unterschiedliche Zugangsdaten. NAS-Passwörter werden nicht in der
+Repository-Adresse gespeichert; SMB benötigt keine Backend-Optionen.
+
+Vor jedem rustic-Aufruf verbindet die Anwendung die gespeicherte Adresse neu
+über den offiziellen [KIO-FUSE-D-Bus-Dienst](https://github.com/KDE/kio-fuse#usage).
+rustic verarbeitet das Repository anschließend als Dateisystem. Der geöffnete
+Netzwerkordner bleibt während des Aufrufs an dieses Dateisystem gebunden.
+Bei fehlender Verbindung wird mit einer verständlichen Meldung abgebrochen;
+ein lokales Ersatz-Repository wird nicht angelegt. KIO-Mounts sind automatisch
+vom Backup ausgeschlossen. Ohne angemeldete KDE-Sitzung bitte einen dauerhaften
+SMB-/NFS-Mount oder einen direkten rustic-Backend wie SFTP verwenden.
+
 ### NAS über SFTP
 
 ```json
@@ -178,9 +218,9 @@ ausgeführt. Ein Testlauf führt keine Hooks aus und schreibt keinen Snapshot.
 
 Der native SFTP-Backend benötigt funktionierende SSH-Schlüsselauthentifizierung;
 Zugang und Backend-Unterstützung mit der installierten rustic-Version prüfen.
-Alternativ ein NAS per SMB/NFS als echtes Dateisystem einhängen und den lokalen
-Mount-Pfad als Repository nutzen, oder `rclone:REMOTE:pfad` konfigurieren.
-Eine `smb://`-Adresse aus Dolphin ist kein lokal eingehängter Verzeichnispfad.
+Alternativ ein NAS per SMB/NFS dauerhaft einhängen und den lokalen Mount-Pfad
+als Repository nutzen, oder `rclone:REMOTE:pfad` konfigurieren. SMB-Adressen aus
+Dolphin werden wie oben beschrieben über KIO FUSE eingebunden.
 restic-URLs wie `sftp:user@host:/pfad` werden bewusst mit einer Erklärung
 abgelehnt; rustic verwendet eine andere Backend-Konfiguration.
 

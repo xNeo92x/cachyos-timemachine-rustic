@@ -1,11 +1,11 @@
 pkgname=cachyos-timemachine-rustic-git
-pkgver=0.2.3
+pkgver=0.2.4
 pkgrel=1
 pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
 arch=('any')
 url='https://github.com/xNeo92x/cachyos-timemachine-rustic'
 license=('MIT')
-depends=('python' 'pyside6' 'rustic>=0.11.4' 'plasma-workspace>=6.3' 'kirigami' 'libnotify' 'systemd' 'xdg-utils')
+depends=('python' 'pyside6' 'rustic>=0.11.4' 'plasma-workspace>=6.3' 'kirigami' 'libnotify' 'systemd' 'xdg-utils' 'kio-fuse' 'kio-extras')
 makedepends=('git')
 optdepends=('1password-cli: save repository passwords to a 1Password vault'
             'rclone: additional remote backends')
@@ -14,7 +14,7 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/cachyos-timemachine-rustic"
-  printf '0.2.3.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf '0.2.4.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {

@@ -54,6 +54,7 @@ from PySide6.QtWidgets import (
 from . import __version__
 from .core import APP, RETENTION, Engine, Error, atomic, validate
 from .integration import autostart_enabled, set_autostart
+from .network import NetworkError, is_smb, mounted_url, smb_url
 from .schedule import ScheduleEditor
 
 
@@ -213,7 +214,7 @@ class Settings(QDialog):
         for key, title, hint in [
             ("name", "Interner Name", "z. B. nas"),
             ("display_name", "Anzeigename", "z. B. Synology NAS"),
-            ("repository", "Repository", "/run/media/…/rustic oder opendal:sftp"),
+            ("repository", "Repository", "Lokaler Ordner oder smb://server/freigabe/backup"),
             ("pre_command", "Vor Backup ausführen", "Optional: Laufwerk einhängen oder NAS wecken"),
             ("on_failure_command", "Bei Fehler ausführen", "Optionaler eigener Befehl"),
         ]:
@@ -224,6 +225,7 @@ class Settings(QDialog):
                 row.addWidget(edit)
                 row.addWidget(button("Ordner auswählen …", self.pick_repository, "folder-open"))
                 form.addRow(title, row)
+                form.addRow("", button("NAS / Netzwerk …", lambda: self.pick_repository(network=True), "network-server"))
             else:
                 form.addRow(title, edit)
             self.fields[key] = edit
@@ -233,7 +235,8 @@ class Settings(QDialog):
         self.options.setMaximumHeight(105)
         form.addRow("Backend-Optionen (JSON)", self.options)
         note = QLabel(
-            "NAS: opendal:sftp mit user, endpoint, root.\nCloud: opendal:s3 mit bucket, region, root. Zugangsdaten siehe README."
+            "NAS / Netzwerk: SMB-Freigabe und Backup-Ordner auswählen. Zugang in KDE Wallet speichern.\n"
+            "SFTP: opendal:sftp mit user, endpoint, root. Cloud: opendal:s3. Details siehe README."
         )
         note.setWordWrap(True)
         form.addRow(note)
@@ -343,13 +346,33 @@ class Settings(QDialog):
         editor.setPlainText("\n".join(lines))
         self.browse_directory = paths[-1] if directory else str(Path(paths[-1]).parent)
 
-    def pick_repository(self):
+    def pick_repository(self, network=False):
         current = self.fields["repository"].text().strip()
-        start = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
-        path = QFileDialog.getExistingDirectory(self, "Backup-Repository auswählen", start)
-        if path:
-            self.fields["repository"].setText(path)
-            self.browse_directory = path
+        if is_smb(current):
+            start = QUrl(current)
+        elif network:
+            start = QUrl("smb://")
+        else:
+            path = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
+            start = QUrl.fromLocalFile(path)
+        selected = QFileDialog.getExistingDirectoryUrl(
+            self, "NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen",
+            start, QFileDialog.Option.ShowDirsOnly, ["file", "smb"]
+        )
+        if selected.isEmpty():
+            return
+        try:
+            if selected.isLocalFile():
+                path = selected.toLocalFile()
+                repository = mounted_url(path) or path
+                self.browse_directory = path
+            else:
+                # Credentials belong to KWallet; never persist passwords from a picker URL.
+                selected.setPassword(None)
+                repository = smb_url(selected.toString(QUrl.ComponentFormattingOption.FullyEncoded))
+            self.fields["repository"].setText(repository)
+        except (NetworkError, OSError) as exc:
+            self.window.error(str(exc))
 
     def store_dest(self):
         if self.index is None or self.index >= len(self.config["destinations"]):
