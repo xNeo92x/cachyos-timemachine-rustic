@@ -35,12 +35,13 @@ keine Quickshell-, Omarchy- oder Hyprland-Abhängigkeit.
 
 Benötigt Python >= 3.11, Qt/PySide6 >= 6.6 und **rustic >= 0.11.4**.
 rustic und PySide6 sind in den Arch-/CachyOS-Paketquellen verfügbar.
+Der pacman-Paketname lautet **`pyside6`**; das Python-Modul heißt `PySide6`.
 
 ```bash
-sudo pacman -Syu python-pyside6 rustic libnotify git
-git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git
-cd cachyos-timemachine-rustic
-python install.py
+sudo pacman -Syu pyside6 rustic libnotify git &&
+git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
+cd cachyos-timemachine-rustic &&
+python install.py &&
 ~/.local/bin/cachyos-time-machine gui
 ```
 

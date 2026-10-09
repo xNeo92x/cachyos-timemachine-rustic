@@ -47,7 +47,7 @@ def main():
         )
         return 0
     if importlib.util.find_spec("PySide6") is None or shutil.which("rustic") is None:
-        print("Bitte zuerst installieren: sudo pacman -Syu python-pyside6 rustic libnotify", file=sys.stderr)
+        print("Bitte zuerst installieren: sudo pacman -Syu pyside6 rustic libnotify", file=sys.stderr)
         return 1
     version = subprocess.run(["rustic", "--version"], text=True, capture_output=True, check=True).stdout
     import re

@@ -5,7 +5,7 @@ pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
 arch=('any')
 url='https://github.com/xNeo92x/cachyos-timemachine-rustic'
 license=('MIT')
-depends=('python' 'python-pyside6' 'rustic>=0.11.4' 'libnotify' 'systemd' 'xdg-utils')
+depends=('python' 'pyside6' 'rustic>=0.11.4' 'libnotify' 'systemd' 'xdg-utils')
 makedepends=('git')
 optdepends=('1password-cli: save repository passwords to a 1Password vault'
             'rclone: additional remote backends')
