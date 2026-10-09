@@ -56,7 +56,7 @@ knownItems=org.cachyos.timemachine
 ''')
 PY
 set +e
-timeout 45s plasmashell --no-respawn --shell org.kde.plasma.desktop > "$task_dir/plasma.log" 2>&1
+timeout 45s plasmashell --no-respawn > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
 cat "$task_dir/plasma.log"
