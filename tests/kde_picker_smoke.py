@@ -61,13 +61,15 @@ force user = root
 """)
         with (base / "smbd.log").open("w") as log:
             server = subprocess.Popen(
-                [shutil.which("smbd"), "--foreground", "--configfile=" + str(smb_config)],
+                [shutil.which("smbd"), "--foreground", "--no-process-group", "--debug-stdout", "--debuglevel=3", "--configfile=" + str(smb_config)],
                 stdout=log, stderr=log, start_new_session=True,
             )
             window = None
             try:
                 def listening():
-                    assert server.poll() is None, (base / "smbd.log").read_text()
+                    assert server.poll() is None, "\n".join(
+                        path.read_text(errors="replace") for path in [base / "smbd.log", *samba.glob("log.*")]
+                    )
                     try:
                         with socket.create_connection(("127.0.0.1", 445), timeout=0.2):
                             return True
