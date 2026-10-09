@@ -676,7 +676,10 @@ class Engine:
                 for path in exclusions:
                     # Escape literal metacharacters in filesystem names.
                     literal = re.sub(r"([\\*?\[\]{}!])", r"\\\1", str(path))
-                    patterns += "\n!" + literal + "\n"
+                    # Also prune descendants when a protected directory is itself
+                    # an explicit source. Otherwise rustic may stat live temporary
+                    # status files before excluding them and report a spurious warning.
+                    patterns += "\n!" + literal + "\n!" + literal.rstrip("/") + "/**\n"
                 args.extend(["--", *sources])
                 # Internal exclusions go last so user includes cannot re-add keys
                 # or the backup repository itself.

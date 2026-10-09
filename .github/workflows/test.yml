@@ -45,4 +45,6 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+          QT_FORCE_STDERR_LOGGING: '1'
+          QT_LOGGING_RULES: 'qml.info=true;qml.warning=true'
         run: dbus-run-session -- bash tests/plasma_smoke.sh
