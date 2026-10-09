@@ -107,7 +107,7 @@ jobs:
           read only = no
           force user = $(id -un)
           EOF
-          sudo /usr/sbin/smbd --foreground --no-process-group --configfile="$nas_test_dir/smb.conf" > "$nas_test_dir/smbd.log" 2>&1 &
+          setsid sudo /usr/sbin/smbd --foreground --configfile="$nas_test_dir/smb.conf" > "$nas_test_dir/smbd.log" 2>&1 &
           nas_server_pid=$!
           trap 'sudo kill "$nas_server_pid" || true' EXIT
           python - <<'PY'

@@ -77,10 +77,12 @@ def main():
         restored = engine.restore("nas", snapshot, str(source / "üñïcode [file].txt"), str(base / "restored"))
         assert Path(restored["restored"]).read_text() == "real SMB backup and restore"
         assert engine.dest("nas")["repository"] == url
+        print("NAS_SMB_BACKUP_CHECK_RESTORE_RECONNECT_OK", flush=True)
         # Disconnect transport, and prove a plain local directory cannot be used instead.
         child.terminate()
         child.wait(timeout=10)
-        subprocess.run([shutil.which("fusermount3"), "-uz", str(second_mount)], check=False)
+        if any(root == second_mount for _, root in kio_mounts()):
+            subprocess.run([shutil.which("fusermount3"), "-uz", str(second_mount)], check=True)
         subprocess.run([
             "sudo", "smbcontrol", "--configfile=" + str(base / "smb.conf"), "smbd", "shutdown"
         ], check=True)
