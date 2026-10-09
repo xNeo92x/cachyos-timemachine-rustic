@@ -62,7 +62,7 @@ force user = root
         with (base / "smbd.log").open("w") as log:
             server = subprocess.Popen(
                 [shutil.which("smbd"), "--foreground", "--no-process-group", "--debug-stdout", "--debuglevel=3", "--configfile=" + str(smb_config)],
-                stdout=log, stderr=log, start_new_session=True,
+                stdin=subprocess.PIPE, stdout=log, stderr=log, start_new_session=True,
             )
             window = None
             try:
@@ -131,6 +131,7 @@ force user = root
                 if server.poll() is None:
                     os.killpg(server.pid, signal.SIGTERM)
                     server.wait(timeout=10)
+                server.stdin.close()
 
 
 if __name__ == "__main__":
