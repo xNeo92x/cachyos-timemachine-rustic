@@ -36,7 +36,7 @@ jobs:
         run: python -m pytest -q
   plasma:
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container: ghcr.io/archlinux/archlinux:latest
     steps:
       - name: Install native Plasma 6 runtime
         run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop plasma-integration kirigami kio-extras kdialog xdotool sway wtype qt6-wayland samba dbus libnotify ripgrep xorg-server-xvfb openbox
