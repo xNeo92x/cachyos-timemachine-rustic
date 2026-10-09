@@ -31,21 +31,21 @@ p = Path(sys.argv[1])
 text = p.read_text().replace('id: root', 'id: root\n    Component.onCompleted: console.info("TIMEMACHINE_APPLET_READY")', 1)
 text = text.replace('serviceError = "";', 'serviceError = ""; console.info("TIMEMACHINE_STATUS_READY");', 1)
 probe = Path('tests/plasma_tray_probe.qml').read_text()
+text = text.replace('import QtQuick\n', 'import QtQuick\nimport QtTest\n', 1)
 text = text.replace('id: root', 'id: root\n' + probe, 1)
 p.write_text(text)
 # The system tray is an embedded containment, not a top-level desktop.
-# Give it a normal parent containment and configure its test-only package copy.
-import shutil
-tray = Path(sys.argv[1]).parents[3] / 'data/plasma/plasmoids/org.kde.plasma.systemtray'
-shutil.copytree('/usr/share/plasma/plasmoids/org.kde.plasma.systemtray', tray)
-main = tray / 'contents/ui/main.qml'
-source = main.read_text().replace('Component.onCompleted: {', '''Component.onCompleted: {
-        Plasmoid.configuration.extraItems = ["org.cachyos.timemachine"];
-        Plasmoid.configuration.shownItems = ["org.cachyos.timemachine"];
-''', 1)
-main.write_text(source)
-installed = tray.parent / 'org.cachyos.timemachine/contents/ui/main.qml'
+# Current Plasma embeds its QML in the native plugin; configure the viewer's
+# first containment (id 1) and tray (id 2), without replacing any KDE code.
+import os
+installed = Path(os.environ['XDG_DATA_HOME']) / 'plasma/plasmoids/org.cachyos.timemachine/contents/ui/main.qml'
 installed.write_text(text)
+config = Path(os.environ['XDG_CONFIG_HOME']) / 'plasmoidviewer-appletsrc'
+config.write_text('''[Containments][1][Applets][2][General]
+extraItems=org.cachyos.timemachine
+shownItems=org.cachyos.timemachine
+knownItems=org.cachyos.timemachine
+''')
 PY
 set +e
 timeout 35s plasmoidviewer -a org.kde.plasma.systemtray -f horizontal -l bottomedge -s 800x80 > "$task_dir/plasma.log" 2>&1

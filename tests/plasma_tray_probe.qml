@@ -1,5 +1,6 @@
 // Test-only block inserted into the applet root by plasma_smoke.sh.
 // Exercise KDE's real tray delegate and popup container, not a desktop widget.
+TestEvent { id: trayInput }
 Timer {
     interval: 500
     repeat: true
@@ -13,9 +14,8 @@ Timer {
             throw new Error("TIMEMACHINE_TEST_FAILED: " + message);
     }
     function click() {
-        const event = {button: Qt.LeftButton};
-        delegate.pressed(event);
-        delegate.clicked(event);
+        check(trayInput.mouseClick(delegate, delegate.width / 2, delegate.height / 2,
+                                  Qt.LeftButton, Qt.NoModifier, 10), "mouse click delivered");
     }
     function checkPopup() {
         check(root.expanded, "applet expanded");
