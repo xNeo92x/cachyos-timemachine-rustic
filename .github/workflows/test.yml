@@ -42,4 +42,7 @@ jobs:
         run: pacman -Syu --noconfirm git python pyside6 rustic plasma-sdk plasma-workspace plasma-desktop kirigami dbus libnotify ripgrep
       - uses: actions/checkout@v4
       - name: Load native applet and expand its popup
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
         run: dbus-run-session -- bash tests/plasma_smoke.sh
