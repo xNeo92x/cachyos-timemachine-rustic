@@ -318,8 +318,8 @@ Snapshot-Historie, Ordner-/Datei-Restore, Unicode-Dateinamen, Ausschlüsse, Test
 Prüfung, falsches Passwort, Abbruch, konkurrierende Zugriffe und Qt-Browserprozesse.
 Zusätzlich werden die D-Bus-Schnittstelle inklusive Backup/Browser/Restore und
 Autostart sowie die Plasma-QML-Syntax geprüft. Der separate Arch-Linux-CI-Job
-lädt das echte Miniprogramm im KDE-Systemabschnitt mit Plasma 6 im Offscreen-Modus.
-Er leitet Drücken/Klicken durch den echten KDE-Tray-Delegate und prüft die
+lädt das echte Miniprogramm im KDE-Systemabschnitt einer vollständigen Plasma-6-Shell
+auf einem virtuellen X11-Display. Er sendet echte Qt-Mausereignisse und prüft die
 Auswahl des Widgets, das sichtbare Popup, Schließen durch zweiten Klick und
 Tastaturaktivierung sowie das tatsächlich verwendete SVG-Bild.
 Eine vollständige CachyOS-/KDE-Wayland-Sitzung, echte NAS-/Cloud-Ziele und

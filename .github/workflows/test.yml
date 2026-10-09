@@ -39,12 +39,27 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install native Plasma 6 runtime
-        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-sdk plasma-workspace plasma-desktop kirigami dbus libnotify ripgrep
+        run: pacman -Syu --noconfirm git python pyside6 rustic plasma-workspace plasma-desktop kirigami dbus libnotify ripgrep xorg-server-xvfb openbox
       - uses: actions/checkout@v4
-      - name: Load native applet and expand its popup
+      - name: Click applet in a real Plasma shell on a virtual X11 display
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: xcb
+          DISPLAY: ':99'
           QT_QUICK_BACKEND: software
           QT_FORCE_STDERR_LOGGING: '1'
           QT_LOGGING_RULES: 'qml.info=true;qml.warning=true'
-        run: dbus-run-session -- bash tests/plasma_smoke.sh
+        run: |
+          Xvfb "$DISPLAY" -screen 0 1280x1024x24 -nolisten tcp > /tmp/xvfb.log 2>&1 &
+          virtual_display_pid=$!
+          trap 'kill "$virtual_display_pid"' EXIT
+          python - <<'PY'
+          from pathlib import Path
+          import time
+          deadline = time.monotonic() + 5
+          while not Path('/tmp/.X11-unix/X99').exists():
+              if time.monotonic() >= deadline:
+                  raise SystemExit('Xvfb did not start')
+              time.sleep(0.05)
+          PY
+          openbox > /tmp/openbox.log 2>&1 &
+          dbus-run-session -- bash tests/plasma_smoke.sh

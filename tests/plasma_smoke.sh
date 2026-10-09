@@ -6,7 +6,7 @@ export XDG_CONFIG_HOME="$task_dir/config"
 export XDG_DATA_HOME="$task_dir/data"
 export XDG_STATE_HOME="$task_dir/state"
 export XDG_CACHE_HOME="$task_dir/cache"
-export QT_QPA_PLATFORM=offscreen
+export QT_QPA_PLATFORM=xcb
 export QT_QUICK_BACKEND=software
 cleanup() {
   python - <<'PY'
@@ -34,25 +34,33 @@ probe = Path('tests/plasma_tray_probe.qml').read_text()
 text = text.replace('import QtQuick\n', 'import QtQuick\nimport QtTest\n', 1)
 text = text.replace('id: root', 'id: root\n' + probe, 1)
 p.write_text(text)
-# The system tray is an embedded containment, not a top-level desktop.
-# Current Plasma embeds its QML in the native plugin; configure the viewer's
-# first containment (id 1) and tray (id 2), without replacing any KDE code.
+# Run a real Plasma shell with one panel and its embedded native tray.
+# No SDK ViewerCorona or replacement of KDE's compiled QML is involved.
 import os
 installed = Path(os.environ['XDG_DATA_HOME']) / 'plasma/plasmoids/org.cachyos.timemachine/contents/ui/main.qml'
 installed.write_text(text)
-config = Path(os.environ['XDG_CONFIG_HOME']) / 'plasmoidviewer-appletsrc'
-config.write_text('''[Containments][1][Applets][2][General]
+config = Path(os.environ['XDG_CONFIG_HOME']) / 'plasma-org.kde.plasma.desktop-appletsrc'
+config.write_text('''[Containments][1]
+plugin=org.kde.panel
+formfactor=2
+location=4
+lastScreen=0
+
+[Containments][1][Applets][2]
+plugin=org.kde.plasma.systemtray
+
+[Containments][1][Applets][2][General]
 extraItems=org.cachyos.timemachine
 shownItems=org.cachyos.timemachine
 knownItems=org.cachyos.timemachine
 ''')
 PY
 set +e
-timeout 35s plasmoidviewer -a org.kde.plasma.systemtray -f horizontal -l bottomedge -s 800x80 > "$task_dir/plasma.log" 2>&1
+timeout 45s plasmashell --no-respawn --shell org.kde.plasma.desktop > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
 cat "$task_dir/plasma.log"
-[[ "$result" == 124 ]] # The applet must stay alive, rather than exit or crash.
+[[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
 for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
