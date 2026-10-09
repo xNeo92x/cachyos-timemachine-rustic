@@ -42,6 +42,9 @@ def test_user_install_launcher_and_desktop_entries(tmp_path):
     assert str(launcher) in desktop
     assert " service" in autostart and "Hidden=false" in autostart
     assert (tmp_path / "data/plasma/plasmoids/org.cachyos.timemachine/contents/ui/main.qml").exists()
+    assert (
+        tmp_path / "data/plasma/plasmoids/org.cachyos.timemachine/contents/icons/cachyos-time-machine.svg"
+    ).read_text() == (script.parent / "packaging/cachyos-time-machine.svg").read_text()
     assert str(launcher) in (tmp_path / "data/dbus-1/services/org.cachyos.TimeMachine.service").read_text()
     result = subprocess.run([str(launcher), "autostart", "disable"], env=env, capture_output=True, text=True)
     assert result.returncode == 0

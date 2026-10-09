@@ -56,7 +56,11 @@ def main(argv=None):
             from .service import main as service_main
             from .service import request_popup
 
-            return service_main(args.config_dir, args.state_dir) if args.tray else request_popup()
+            return (
+                service_main(args.config_dir, args.state_dir)
+                if args.tray
+                else request_popup(args.config_dir, args.state_dir)
+            )
         if args.command == "service":
             from .service import main as service_main
 

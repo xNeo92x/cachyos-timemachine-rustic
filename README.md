@@ -49,11 +49,13 @@ python install.py &&
 
 Der Installer installiert für deinen Benutzer und benötigt selbst kein sudo.
 Er legt das Plasma-Miniprogramm, einen Menüeintrag, die D-Bus-Aktivierung und
-einen KDE-Autostart-Eintrag an. In einer laufenden KDE-Sitzung fügt er das Symbol
-einmal zur vorhandenen Leiste hinzu. Deine übrige Leistenkonfiguration bleibt erhalten.
-Falls KDE die automatische Ergänzung nicht erlaubt: **Leiste bearbeiten →
-Miniprogramme hinzufügen → CachyOS Time Machine**. Bei erstmals installierten
-Miniprogrammen kann KDE eine erneute Anmeldung benötigen.
+einen KDE-Autostart-Eintrag an. In einer laufenden KDE-Sitzung aktiviert er das Symbol im vorhandenen
+**Systemabschnitt**, neben den anderen Statussymbolen und vor der Uhr.
+Ein separat am rechten Leistenende platziertes Symbol aus Version 0.2.0 wird
+automatisch entfernt. Deine übrige Leistenkonfiguration bleibt erhalten.
+Falls KDE die automatische Ergänzung nicht erlaubt: **Systemabschnitt einrichten →
+Einträge → CachyOS Time Machine → Immer angezeigt**.
+Das SVG liegt direkt im Miniprogramm und benötigt keinen aktualisierten Icon-Cache.
 
 **Ein Klick auf das Symbol öffnet das Popup.** Es enthält Zielauswahl, Backup,
 Prüfung, Testlauf, Abbruch, Wiederherstellung und Zeitplanung. Der Schalter
@@ -62,9 +64,18 @@ entfernt weder das Miniprogramm noch die unabhängigen systemd-Backup-Zeitpläne
 der Dienst startet beim nächsten Zugriff des Miniprogramms bei Bedarf.
 Der Installer erhält den zuletzt gewählten Autostart-Zustand bei Updates.
 
-Alternativ kann das Miniprogramm im **Systemabschnitt → Einträge** aktiviert
-werden. Dann das zusätzlich in der Leiste platzierte Symbol entfernen, um nur
-einen Eintrag zu haben. Der alte Qt-Tray-Eintrag wird im Standardmodus nicht mehr erzeugt.
+Alternativ lässt sich das Miniprogramm als einzelnes Leisten-Widget hinzufügen.
+Der Installer und der Menüeintrag verwenden standardmäßig den Systemabschnitt.
+Der alte Qt-Tray-Eintrag wird im Standardmodus nicht mehr erzeugt.
+
+### Sofortiger Start nach Installation
+
+Version 0.2.1 aktualisiert die D-Bus-Aktivierung der laufenden Sitzung. Falls
+der Sitzungsbus die neue Service-Datei trotzdem noch nicht erkennt, startet
+`cachyos-time-machine gui` den Dienst direkt und wartet auf dessen Bereitschaft.
+Eine erneute KDE-Anmeldung ist dafür nicht erforderlich. Bei einem tatsächlichen
+Startfehler enthält `~/.local/state/cachyos-time-machine/desktop-service.log`
+die Details (bei eigenen XDG-Pfaden entsprechend im Statusordner).
 
 Optional als Arch-Paket statt Benutzerinstallation:
 
@@ -307,8 +318,10 @@ Zusätzlich werden die D-Bus-Schnittstelle inklusive Backup/Browser/Restore und
 Autostart sowie die Plasma-QML-Syntax geprüft. Der separate Arch-Linux-CI-Job
 lädt das echte Miniprogramm mit Plasma 6 und öffnet dessen Popup im Offscreen-Modus.
 Eine vollständige CachyOS-/KDE-Wayland-Sitzung, echte NAS-/Cloud-Ziele und
-1Password stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.0
-ergänzt die native Plasma-Integration.
+1Password stehen hier nicht für Integrationstests zur Verfügung. Version 0.2.1
+ergänzt zuverlässigen Sofortstart, Systemabschnitt-Migration und gebündelte Icons.
+Der native Test prüft explizit die Bereitschaft von Miniprogramm, Popup, D-Bus
+und SVG; ein bloß weiterlaufender Test-Viewer gilt nicht als erfolgreicher Start.
 
 Das bisherige Qt-Hauptfenster bleibt bei Bedarf mit
 `cachyos-time-machine gui --window` zugänglich. Es ist nicht der Standardmodus.
@@ -331,8 +344,7 @@ python install.py --uninstall
 ```
 
 Die Anwendung und ihre Timer werden entfernt. Konfiguration, Schlüssel,
-Protokolle und die Backup-Repositories bleiben erhalten. Das automatisch hinzugefügte
-Leisten-Miniprogramm und der eigene Autostart-Eintrag werden entfernt. Manuell im
-Systemabschnitt aktivierte Einträge gegebenenfalls dort wieder deaktivieren.
+Protokolle und die Backup-Repositories bleiben erhalten. Der Eintrag im Systemabschnitt, das separate
+Leisten-Miniprogramm und der eigene Autostart-Eintrag werden entfernt.
 
 MIT. Herkunft und technische Portierungsdetails: [docs/UPSTREAM.md](docs/UPSTREAM.md).

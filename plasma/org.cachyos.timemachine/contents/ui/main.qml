@@ -193,7 +193,7 @@ PlasmoidItem {
         });
     }
 
-    Plasmoid.icon: "cachyos-time-machine"
+    Plasmoid.icon: Qt.resolvedUrl("../icons/cachyos-time-machine.svg").toString()
     Plasmoid.status: PlasmaCore.Types.ActiveStatus
     preferredRepresentation: compactRepresentation
     toolTipMainText: "CachyOS Time Machine"
@@ -205,7 +205,7 @@ PlasmoidItem {
 
         Kirigami.Icon {
             anchors.fill: parent
-            source: "cachyos-time-machine"
+            source: Plasmoid.icon
         }
         Rectangle {
             anchors.bottom: parent.bottom

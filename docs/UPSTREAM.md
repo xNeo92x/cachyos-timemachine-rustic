@@ -14,7 +14,7 @@ Entwickelt und getestet mit rustic **0.11.4**.
 
 | Omarchy-Funktion | Umsetzung in CachyOS KDE |
 | --- | --- |
-| Ein Symbol in der Leiste | Natives Plasma-6-Miniprogramm, direkt in der Leiste oder optional im Systemabschnitt |
+| Ein Symbol in der Leiste | Natives Plasma-6-Miniprogramm, standardmäßig im KDE-Systemabschnitt, mit gebündeltem SVG |
 | Fehler-/Überfällig-Anzeige | Rotes Symbol, letzte erfolgreiche Sicherung separat gespeichert |
 | Panel und mehrere Ziele | An der KDE-Leiste verankertes Plasma-Popup mit Zielauswahl |
 | Quellen als Pfad oder Liste | JSON `source`; fehlende Quellen brechen den gesamten Backup-Vorgang ab |
@@ -34,7 +34,12 @@ Plasma übernimmt Popup-Verankerung, Theme, Skalierung und Wayland-Integration.
 Der Python-Dienst stellt eine schmale Sitzungs-D-Bus-Schnittstelle bereit;
 Repository-Zugriffe bleiben CLI-Unterprozesse außerhalb von plasmashell.
 Das optionale bisherige Qt-Hauptfenster ist mit `gui --window` erreichbar.
+Ab 0.2.1 wird ein separater Eintrag aus 0.2.0 in den Systemabschnitt migriert.
+Die Integration unterstützt sowohl den älteren Systemtray-Unter-Containment
+als auch die zusammengeführte Plasma-6-Systemtray-Implementierung.
 Autostart ist ein benutzerspezifischer KDE-Desktop-Eintrag und im Popup schaltbar.
+Neue D-Bus-Service-Dateien werden in der laufenden Sitzung neu eingelesen;
+bei fehlender Aktivierung startet der Launcher den Dienst direkt.
 Backup-Zeitpläne bleiben davon unabhängig. Quickshell/Waybar/Hyprland sind nicht nötig.
 
 KDE-Referenzen:

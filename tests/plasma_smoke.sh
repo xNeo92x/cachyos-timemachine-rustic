@@ -8,23 +8,47 @@ export XDG_STATE_HOME="$task_dir/state"
 export XDG_CACHE_HOME="$task_dir/cache"
 export QT_QPA_PLATFORM=offscreen
 export QT_QUICK_BACKEND=software
-service_pid=
 cleanup() {
-  if [[ -n "$service_pid" ]]; then kill "$service_pid" 2>/dev/null || true; fi
+  python - <<'PY'
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtDBus import QDBusConnection, QDBusMessage
+app = QCoreApplication([])
+QDBusConnection.sessionBus().call(QDBusMessage.createMethodCall('org.cachyos.TimeMachine', '/TimeMachine', 'org.cachyos.TimeMachine', 'Shutdown'))
+PY
   rm -rf "$task_dir"
 }
 trap cleanup EXIT
 python install.py --no-panel --bin-dir "$task_dir/bin"
 python -m timemachine.cli configure
-python -m timemachine.cli service > "$task_dir/service.log" 2>&1 &
-service_pid=$!
+# No manually pre-started service: reproduces the user's immediate post-install launch.
 python -m timemachine.cli gui
+cp -r plasma/org.cachyos.timemachine "$task_dir/applet"
+# Test-only readiness markers: a live viewer alone does not prove the applet loaded.
+python - "$task_dir/applet/contents/ui/main.qml" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+text = p.read_text().replace('id: root', 'id: root\n    Component.onCompleted: console.info("TIMEMACHINE_APPLET_READY")', 1)
+text = text.replace('serviceError = "";', 'serviceError = ""; console.info("TIMEMACHINE_STATUS_READY");', 1)
+text = text.replace('fullRepresentation: ColumnLayout {', '''fullRepresentation: ColumnLayout {
+        Component.onCompleted: console.info("TIMEMACHINE_POPUP_READY")
+        Image {
+            visible: false
+            source: Qt.resolvedUrl("../icons/cachyos-time-machine.svg")
+            onStatusChanged: if (status === Image.Ready) console.info("TIMEMACHINE_ICON_READY")
+        }
+''', 1)
+p.write_text(text)
+PY
 set +e
-timeout 20s plasmoidviewer -a "$PWD/plasma/org.cachyos.timemachine" > "$task_dir/plasma.log" 2>&1
+timeout 35s plasmoidviewer -a "$task_dir/applet" > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
-cat "$task_dir/service.log" "$task_dir/plasma.log"
+cat "$task_dir/plasma.log"
 [[ "$result" == 124 ]] # The applet must stay alive, rather than exit or crash.
-if rg 'main.qml.*(Error|error|ReferenceError|TypeError|Cannot|Unable)|Type .* unavailable|Error loading applet' "$task_dir/plasma.log"; then
+for marker in APPLET POPUP STATUS ICON; do
+  rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
+done
+if rg 'main.qml:[0-9]+|Type .* unavailable|Error loading applet' "$task_dir/plasma.log"; then
   exit 1
 fi

@@ -152,13 +152,22 @@ def main():
         from PySide6.QtCore import QCoreApplication
 
         from timemachine.integration import integrate_panel
+        from timemachine.service import ensure_service
 
         qt_app = QCoreApplication.instance() or QCoreApplication([])
+        if not ensure_service():
+            print(
+                "Hintergrunddienst konnte nicht starten. Details: ~/.local/state/cachyos-time-machine/desktop-service.log",
+                file=sys.stderr,
+            )
+            return 1
         if integrate_panel():
-            print("Plasma-Miniprogramm zur vorhandenen KDE-Leiste hinzugefügt (keine Duplikate).")
+            print(
+                "Time Machine im vorhandenen KDE-Systemabschnitt aktiviert. Separates Leisten-Symbol entfernt."
+            )
         else:
             print(
-                "Miniprogramm installiert. In KDE: Leiste bearbeiten → Miniprogramme hinzufügen → CachyOS Time Machine."
+                "Miniprogramm installiert. In KDE: Systemabschnitt einrichten → Einträge → CachyOS Time Machine → Immer angezeigt."
             )
         qt_app.processEvents()
     print("Installiert. Start: " + str(launcher))

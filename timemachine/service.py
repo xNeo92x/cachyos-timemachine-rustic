@@ -1,16 +1,25 @@
 """Session D-Bus bridge. Repository commands run in isolated CLI subprocesses."""
 
 import json
+import os
 import sys
 import uuid
+from pathlib import Path
 
-from PySide6.QtCore import ClassInfo, QObject, QTimer, Slot
+from PySide6.QtCore import ClassInfo, QEventLoop, QObject, QProcess, QProcessEnvironment, QTimer, Slot
 from PySide6.QtDBus import QDBusConnection, QDBusMessage
 from PySide6.QtWidgets import QApplication
 
 from .core import Engine, Error
 from .gui import Window, date, human_size, status_text
-from .integration import OBJECT, SERVICE, autostart_enabled, integrate_panel, set_autostart
+from .integration import (
+    OBJECT,
+    SERVICE,
+    autostart_enabled,
+    integrate_panel,
+    reload_dbus_services,
+    set_autostart,
+)
 
 
 def encoded(value):
@@ -156,17 +165,80 @@ class Bridge(QObject):
         return encoded({"ok": True})
 
 
-def request_popup():
+def ensure_service(config_dir=None, state_dir=None):
+    """Prefer D-Bus activation; explicitly launch on older sessions missing its new service file."""
+    bus = QDBusConnection.sessionBus()
+    if not bus.isConnected():
+        return False
+    reload_dbus_services()
+    probe = QDBusMessage.createMethodCall(SERVICE, OBJECT, SERVICE, "Status")
+    if bus.call(probe, timeout=3000).type() != QDBusMessage.MessageType.ErrorMessage:
+        return True
+    # Do not depend on the session bus having discovered ~/.local/share/dbus-1/services.
+    process = QProcess()
+    process.setProgram(sys.executable)
+    args = ["-m", "timemachine.cli"]
+    for key, value in (("--config-dir", config_dir), ("--state-dir", state_dir)):
+        if value is not None:
+            args += [key, str(value)]
+    process.setArguments([*args, "service"])
+    env = QProcessEnvironment.systemEnvironment()
+    env.insert("PYTHONPATH", str(Path(__file__).resolve().parent.parent))
+    process.setProcessEnvironment(env)
+    log_dir = Path(
+        state_dir
+        or Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "cachyos-time-machine"
+    )
+    log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    log = log_dir / "desktop-service.log"
+    log.touch(mode=0o600, exist_ok=True)
+    log.chmod(0o600)
+    process.setStandardOutputFile(str(log), QProcess.OpenModeFlag.Append)
+    process.setStandardErrorFile(str(log), QProcess.OpenModeFlag.Append)
+    started, _ = process.startDetached()
+    if not started:
+        return False
+    loop = QEventLoop()
+    poll = QTimer()
+    poll.setInterval(100)
+    ready = False
+
+    def check():
+        nonlocal ready
+        if bus.interface().isServiceRegistered(SERVICE).value():
+            ready = bus.call(probe, timeout=1000).type() != QDBusMessage.MessageType.ErrorMessage
+            if ready:
+                loop.quit()
+
+    poll.timeout.connect(check)
+    poll.start()
+    limit = QTimer()
+    limit.setSingleShot(True)
+    limit.timeout.connect(loop.quit)
+    limit.start(8000)
+    loop.exec()
+    poll.stop()
+    limit.stop()
+    return ready
+
+
+def request_popup(config_dir=None, state_dir=None):
     app = QApplication.instance() or QApplication([sys.argv[0]])
     bus = QDBusConnection.sessionBus()
     if not bus.isConnected():
         print("Keine KDE-Sitzung erreichbar.", file=sys.stderr)
         return 1
     integrate_panel()
+    if not ensure_service(config_dir, state_dir):
+        print(
+            "Der Hintergrunddienst konnte nicht starten. Details: desktop-service.log im Time-Machine-Statusordner.",
+            file=sys.stderr,
+        )
+        return 1
     request = QDBusMessage.createMethodCall(SERVICE, OBJECT, SERVICE, "RequestPopup")
     reply = bus.call(request)
     if reply.type() == QDBusMessage.MessageType.ErrorMessage:
-        print(reply.errorMessage() + "\nBitte python install.py ausführen.", file=sys.stderr)
+        print(reply.errorMessage(), file=sys.stderr)
         return 1
     # Keep QApplication alive until synchronous D-Bus work has completed.
     app.processEvents()
@@ -182,10 +254,13 @@ def main(config_dir=None, state_dir=None):
     if not bus.isConnected():
         print("Keine D-Bus-Sitzung erreichbar.", file=sys.stderr)
         return 1
-    if not bus.registerService(SERVICE):
+    if bus.interface().isServiceRegistered(SERVICE).value():
         return 0  # An already running instance owns the service.
     window = Window(config_dir, state_dir, native_panel=True)
     bridge = Bridge(window)
     if not bus.registerObject(OBJECT, bridge, QDBusConnection.RegisterOption.ExportAllSlots):
         return 1
+    # Own the name only after the exported object is ready for activation requests.
+    if not bus.registerService(SERVICE):
+        return 0
     return app.exec()

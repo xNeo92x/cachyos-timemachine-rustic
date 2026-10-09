@@ -52,24 +52,47 @@ def set_autostart(enabled, launcher=None):
 
 
 def panel_script(remove=False):
-    """Add at most one widget to an existing panel; never replace the user's layout."""
+    """Enable in existing trays, supporting both legacy and merged Plasma containments."""
     return """
-var found = false;
+var plugin = 'org.cachyos.timemachine';
+var removing = %s;
+var integrated = false;
 var ps = panels();
+var standalone = [];
+function items(tray, key) {
+    var value = tray.readConfig(key, []);
+    return Array.isArray(value) ? value : String(value || '').split(',').filter(function(v) { return v.length > 0; });
+}
+function change(tray, key, enabled) {
+    var values = items(tray, key);
+    var next = values.filter(function(v) { return v !== plugin; });
+    if (enabled) next.push(plugin);
+    if (JSON.stringify(values) !== JSON.stringify(next)) tray.writeConfig(key, next);
+}
 for (var i = 0; i < ps.length; ++i) {
     var ws = ps[i].widgets();
     for (var j = 0; j < ws.length; ++j) {
-        if (ws[j].type === 'org.cachyos.timemachine') {
-            found = true;
-            %s
+        var widget = ws[j];
+        if (widget.type === plugin) standalone.push(widget);
+        if (widget.type === 'org.kde.plasma.systemtray') {
+            widget.currentConfigGroup = [];
+            var legacyId = widget.readConfig('SystrayContainmentId', 0);
+            var tray = legacyId ? desktopById(legacyId) : widget;
+            if (!tray) continue;
+            tray.currentConfigGroup = ['General'];
+            change(tray, 'knownItems', !removing);
+            change(tray, 'shownItems', !removing);
+            change(tray, 'hiddenItems', false);
+            change(tray, 'extraItems', !removing);
+            tray.reloadConfig();
+            integrated = true;
         }
     }
 }
-%s
-""" % (
-        "ws[j].remove();" if remove else "",
-        "" if remove else "if (!found && ps.length) ps[0].addWidget('org.cachyos.timemachine');",
-    )
+// Migrate 0.2.0's separate right-hand panel widget only after a tray was found.
+if (integrated || removing) standalone.forEach(function(widget) { widget.remove(); });
+print(integrated || removing ? 'CACHYOS_TRAY_OK' : 'CACHYOS_TRAY_MISSING');
+""" % ("true" if remove else "false",)
 
 
 def integrate_panel(remove=False):
@@ -81,4 +104,19 @@ def integrate_panel(remove=False):
     if not shell.isValid():
         return False
     reply = shell.call("evaluateScript", panel_script(remove))
-    return reply.type() != QDBusMessage.MessageType.ErrorMessage
+    return reply.type() != QDBusMessage.MessageType.ErrorMessage and any(
+        "CACHYOS_TRAY_OK" in str(value) for value in reply.arguments()
+    )
+
+
+def reload_dbus_services():
+    """Refresh session-bus activation after creating a previously absent services directory."""
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage
+
+    bus = QDBusConnection.sessionBus()
+    if not bus.isConnected():
+        return False
+    request = QDBusMessage.createMethodCall(
+        "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ReloadConfig"
+    )
+    return bus.call(request, timeout=3000).type() != QDBusMessage.MessageType.ErrorMessage

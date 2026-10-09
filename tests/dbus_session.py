@@ -107,6 +107,29 @@ def main():
         assert (source / "file.txt").read_text() == "DBus restore content"
         assert call("Shutdown")["ok"]
         daemon.wait(timeout=5)
+        # A session started before installation may not know the activation file.
+        # Launch through gui without a registered activation file; it must start the service itself.
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "timemachine.cli",
+                "--config-dir",
+                str(base / "config"),
+                "--state-dir",
+                str(base / "state"),
+                "gui",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert call("Status")["ok"]
+        assert call("Status")["open_requested"] == 1
+        assert call("Shutdown")["ok"]
     finally:
         if daemon.poll() is None:
             daemon.terminate()
