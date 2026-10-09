@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cachyos-timemachine-rustic"
+version = "0.1.0"
+description = "Native KDE Time Machine backups powered by rustic"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = ["PySide6>=6.6"]
+
+[project.scripts]
+cachyos-time-machine = "timemachine.cli:main"
+
+[tool.setuptools]
+packages = ["timemachine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: uses a real rustic binary"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

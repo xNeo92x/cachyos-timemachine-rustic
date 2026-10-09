@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CachyOS Time Machine
+Comment=Encrypted backups with rustic
+Comment[de]=Verschlüsselte Sicherungen mit rustic
+Exec=cachyos-time-machine gui
+Icon=cachyos-time-machine
+Terminal=false
+Categories=System;Utility;Archiving;
+StartupNotify=false

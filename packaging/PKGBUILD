@@ -1,0 +1,35 @@
+pkgname=cachyos-timemachine-rustic-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
+arch=('any')
+url='https://github.com/xNeo92x/cachyos-timemachine-rustic'
+license=('MIT')
+depends=('python' 'python-pyside6' 'rustic>=0.11.4' 'libnotify' 'systemd' 'xdg-utils')
+makedepends=('git')
+optdepends=('1password-cli: save repository passwords to a 1Password vault'
+            'rclone: additional remote backends')
+source=('git+https://github.com/xNeo92x/cachyos-timemachine-rustic.git')
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/cachyos-timemachine-rustic"
+  printf '0.1.0.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "$srcdir/cachyos-timemachine-rustic"
+  install -d "$pkgdir/usr/share/cachyos-time-machine/timemachine" "$pkgdir/usr/bin"
+  install -m644 timemachine/*.py "$pkgdir/usr/share/cachyos-time-machine/timemachine/"
+  cat > "$pkgdir/usr/bin/cachyos-time-machine" <<'EOF'
+#!/bin/sh
+export PYTHONPATH=/usr/share/cachyos-time-machine
+if [ "$#" -eq 0 ]; then set -- gui; fi
+exec /usr/bin/python -m timemachine.cli "$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/cachyos-time-machine"
+  install -Dm644 packaging/cachyos-time-machine.desktop "$pkgdir/usr/share/applications/cachyos-time-machine.desktop"
+  install -Dm644 packaging/cachyos-time-machine.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/cachyos-time-machine.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
