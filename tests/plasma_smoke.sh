@@ -49,6 +49,6 @@ cat "$task_dir/plasma.log"
 for marker in APPLET POPUP STATUS ICON; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
-if rg 'main.qml:[0-9]+|Type .* unavailable|Error loading applet' "$task_dir/plasma.log"; then
+if rg "file://$task_dir/applet/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then
   exit 1
 fi
