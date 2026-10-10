@@ -6,6 +6,8 @@ import re
 
 CHOICES = ("system", "de", "en")
 EN = {
+    "Wiederherstellen …": "Restore …",
+    "Weitere Aktionen …": "More actions …",
     "Warte auf Fortschrittsdaten …": "Waiting for progress data …",
     "Verarbeitet: {p0} / {p1}": "Processed: {p0} / {p1}",
     "Verarbeitet: {p0} · Gesamtgröße wird ermittelt …": "Processed: {p0} · calculating total size …",

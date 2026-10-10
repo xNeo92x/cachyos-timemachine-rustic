@@ -53,6 +53,11 @@ and compression mean it does not measure actual network traffic to the NAS.
 Without fresh progress data, an outdated speed or remaining-time estimate is
 not displayed.
 
+The selected destination's live metrics remain visible without scrolling. With
+multiple destinations, use the dropdown to switch between them. The main actions
+use two equal-width columns; check, dry run, password, initialization, logs and
+schedule controls are available under **More actions …**.
+
 ## Interface language
 
 Open **Settings → Sources & destinations → Language** and choose **Use system

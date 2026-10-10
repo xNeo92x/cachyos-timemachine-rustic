@@ -11,6 +11,7 @@ export QT_QUICK_BACKEND=software
 # The disposable Arch container has no configured /etc/localtime. Give rustic
 # a known zone, as a configured desktop session would have.
 export TZ=UTC
+export TIMEMACHINE_TEST_LANGUAGE="${1:-en}"
 cleanup() {
   python - <<'PY'
 from PySide6.QtCore import QCoreApplication
@@ -43,7 +44,7 @@ os.execvp('rustic', ['rustic', *sys.argv[1:]])
 ''')
 wrapper.chmod(0o700)
 atomic(Path(os.environ['XDG_CONFIG_HOME']) / 'cachyos-time-machine/config.json', {
-    'language': 'en',
+    'language': os.environ['TIMEMACHINE_TEST_LANGUAGE'],
     'rustic_binary': str(wrapper),
     'source': str(source), 'destinations': [{'name': 'test', 'repository': str(base / 'repo')}],
 })
@@ -60,7 +61,9 @@ import sys
 p = Path(sys.argv[1])
 text = p.read_text().replace('id: root', 'id: root\n    Component.onCompleted: console.info("TIMEMACHINE_APPLET_READY")', 1)
 text = text.replace('serviceError = "";', 'serviceError = ""; console.info("TIMEMACHINE_STATUS_READY");', 1)
-probe = Path('tests/plasma_tray_probe.qml').read_text()
+import json, os
+probe = Path('tests/plasma_tray_probe.qml').read_text().replace('property string expectedLanguage: "en"',
+    'property string expectedLanguage: ' + json.dumps(os.environ['TIMEMACHINE_TEST_LANGUAGE']))
 text = text.replace('import QtQuick\n', 'import QtQuick\nimport QtTest\n', 1)
 text = text.replace('id: root', 'id: root\n' + probe, 1)
 p.write_text(text)
@@ -92,7 +95,7 @@ set -e
 cat "$task_dir/plasma.log"
 python -m timemachine.cli log --dest test
 [[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
-for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE ENGLISH_UI LIVE_PROGRESS PASSWORDLESS_BACKUP KEY_DIALOG; do
+for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE LOCALIZED_UI LIVE_PROGRESS COMPACT_LAYOUT PASSWORDLESS_BACKUP ACTION_MENU KEY_DIALOG; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
 if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/(applet|data/plasma/plasmoids/org.cachyos.timemachine)/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then

@@ -244,6 +244,8 @@ PlasmoidItem {
         }
     }
     fullRepresentation: ColumnLayout {
+        property alias actionsMenu: actionsMenu
+
         Layout.minimumHeight: Kirigami.Units.gridUnit * 22
         Layout.minimumWidth: Kirigami.Units.gridUnit * 23
         Layout.preferredHeight: Kirigami.Units.gridUnit * 32
@@ -284,90 +286,115 @@ PlasmoidItem {
             visible: !!root.serviceError
             wrapMode: Text.Wrap
         }
-        PC.ScrollView {
-            Layout.fillHeight: true
+        PC.ComboBox {
             Layout.fillWidth: true
-            visible: !root.browser
+            Layout.minimumWidth: 0
+            objectName: "backupDestinationSelector"
+            visible: !root.browser && root.rows.length > 1
+            model: root.rows.map(r => r.display_name)
+            currentIndex: root.selected ? root.rows.findIndex(r => r.name === root.selected.name) : -1
 
-            contentItem: ListView {
-                clip: true
-                model: root.rows
+            onActivated: index => root.selected = root.rows[index]
+        }
+        PC.Label {
+            Layout.fillWidth: true
+            text: root.tr("Noch kein Backup-Ziel eingerichtet")
+            visible: !root.browser && !root.selected
+        }
+        // The selected destination is outside a ScrollView so its live metrics
+        // cannot be clipped by the space needed for the action buttons.
+        PC.Frame {
+            id: destinationCard
+            readonly property var destination: root.selected || ({})
+            readonly property var liveProgress: destination.progress_view || ({})
 
-                delegate: PC.ItemDelegate {
-                    id: destinationDelegate
-                    required property var modelData
-                    readonly property var liveProgress: modelData.progress_view || ({})
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            objectName: "backupDestinationCard"
+            visible: !root.browser && !!root.selected
+            padding: Kirigami.Units.smallSpacing * 2
 
-                    highlighted: root.selected && root.selected.name === modelData.name
-                    width: ListView.view.width
+            contentItem: ColumnLayout {
+                spacing: Kirigami.Units.smallSpacing
 
-                    contentItem: ColumnLayout {
-                        RowLayout {
-                            PC.Label {
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
-                                font.bold: true
-                                text: modelData.display_name
-                            }
-                            PC.Label {
-                                font.pointSize: Kirigami.Theme.smallFont.pointSize
-                                opacity: 0.7
-                                text: modelData.last_success_text
-                            }
-                        }
-                        PC.Label {
-                            opacity: 0.7
-                            text: modelData.size_text + " · " + (modelData.snapshot_count === undefined ? "–" : modelData.snapshot_count) + " Snapshots"
-                        }
-                        PC.Label {
-                            Layout.fillWidth: true
-                            color: modelData.stale || modelData.status === "failed" ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
-                            text: modelData.status_text
-                            wrapMode: Text.Wrap
-                        }
-                        PC.ProgressBar {
-                            Layout.fillWidth: true
-                            objectName: "backupLiveProgressBar"
-                            from: 0
-                            to: 1
-                            indeterminate: typeof destinationDelegate.liveProgress.percent !== "number"
-                            value: typeof destinationDelegate.liveProgress.percent === "number" ? destinationDelegate.liveProgress.percent : 0
-                            visible: !!destinationDelegate.liveProgress.active
-                        }
-                        PC.Label {
-                            Layout.fillWidth: true
-                            objectName: "backupLiveProgressDetails"
-                            text: destinationDelegate.liveProgress.detail || ""
-                            visible: !!destinationDelegate.liveProgress.active
-                            wrapMode: Text.Wrap
-                        }
-                        PC.Label {
-                            Layout.fillWidth: true
-                            objectName: "backupLiveProgressSpeed"
-                            text: destinationDelegate.liveProgress.speed || ""
-                            visible: !!destinationDelegate.liveProgress.active
-                            wrapMode: Text.Wrap
-                            QQC2.ToolTip.visible: speedHover.hovered
-                            QQC2.ToolTip.delay: 500
-                            QQC2.ToolTip.text: destinationDelegate.liveProgress.speed_hint || ""
-                            HoverHandler { id: speedHover }
-                        }
-                        PC.Label {
-                            Layout.fillWidth: true
-                            text: destinationDelegate.liveProgress.timing || ""
-                            visible: !!destinationDelegate.liveProgress.active
-                            wrapMode: Text.Wrap
-                        }
-                        PC.Label {
-                            Layout.fillWidth: true
-                            color: Kirigami.Theme.negativeTextColor
-                            text: modelData.backup_error || modelData.error || modelData.maintenance_error || ""
-                            visible: !!(modelData.backup_error || modelData.error || modelData.maintenance_error)
-                            wrapMode: Text.Wrap
-                        }
+                RowLayout {
+                    Layout.fillWidth: true
+                    PC.Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        elide: Text.ElideRight
+                        font.bold: true
+                        text: destinationCard.destination.display_name || ""
                     }
-
-                    onClicked: root.selected = modelData
+                    PC.Label {
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        opacity: 0.7
+                        text: destinationCard.destination.last_success_text || ""
+                    }
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    opacity: 0.7
+                    text: (destinationCard.destination.size_text || "–") + " · " + (destinationCard.destination.snapshot_count === undefined ? "–" : destinationCard.destination.snapshot_count) + " Snapshots"
+                    wrapMode: Text.Wrap
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    color: destinationCard.destination.stale || destinationCard.destination.status === "failed" ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+                    text: destinationCard.destination.status_text || ""
+                    wrapMode: Text.Wrap
+                }
+                PC.ProgressBar {
+                    Layout.fillWidth: true
+                    objectName: "backupLiveProgressBar"
+                    from: 0
+                    to: 1
+                    indeterminate: typeof destinationCard.liveProgress.percent !== "number"
+                    value: typeof destinationCard.liveProgress.percent === "number" ? destinationCard.liveProgress.percent : 0
+                    visible: !!destinationCard.liveProgress.active
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    objectName: "backupLiveProgressDetails"
+                    text: destinationCard.liveProgress.detail || ""
+                    visible: !!destinationCard.liveProgress.active
+                    wrapMode: Text.Wrap
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    objectName: "backupLiveProgressSpeed"
+                    text: destinationCard.liveProgress.speed || ""
+                    visible: !!destinationCard.liveProgress.active
+                    wrapMode: Text.Wrap
+                    QQC2.ToolTip.visible: speedHover.hovered
+                    QQC2.ToolTip.delay: 500
+                    QQC2.ToolTip.text: destinationCard.liveProgress.speed_hint || ""
+                    HoverHandler { id: speedHover }
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    objectName: "backupLiveProgressTiming"
+                    text: destinationCard.liveProgress.timing || ""
+                    visible: !!destinationCard.liveProgress.active
+                    wrapMode: Text.Wrap
+                }
+                PC.Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    color: Kirigami.Theme.negativeTextColor
+                    text: destinationCard.destination.backup_error || destinationCard.destination.error || destinationCard.destination.maintenance_error || ""
+                    visible: !!text
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    wrapMode: Text.Wrap
+                    QQC2.ToolTip.visible: errorHover.hovered
+                    QQC2.ToolTip.text: text
+                    HoverHandler { id: errorHover }
                 }
             }
         }
@@ -463,16 +490,21 @@ PlasmoidItem {
                 }
             }
         }
-        ColumnLayout {
+        Item {
+            Layout.fillHeight: true
+            visible: !root.browser
+        }
+        GridLayout {
             Layout.fillWidth: true
+            columns: 2
+            columnSpacing: Kirigami.Units.smallSpacing
+            rowSpacing: Kirigami.Units.smallSpacing
             visible: !root.browser
 
-            PC.Label {
-                font.bold: true
-                text: root.selected ? root.selected.display_name : root.tr("Noch kein Backup-Ziel eingerichtet")
-            }
             PC.Button {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
                 enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-save"
                 objectName: "backupNowButton"
@@ -482,85 +514,100 @@ PlasmoidItem {
             }
             PC.Button {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
                 enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-revert"
-                text: root.tr("Dateien wiederherstellen …")
+                objectName: "backupRestoreButton"
+                text: root.tr("Wiederherstellen …")
 
                 onClicked: root.browse()
             }
-            RowLayout {
-                PC.Button {
-                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: root.tr("Prüfen")
+            PC.Button {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
+                enabled: root.selected && root.selected.status === "running"
+                icon.name: "process-stop"
+                objectName: "backupCancelButton"
+                text: root.tr("Abbrechen")
 
-                    onClicked: root.action("check")
-                }
-                PC.Button {
-                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: root.tr("Testlauf")
-
-                    onClicked: root.action("backup", {
-                        dry_run: true
-                    })
-                }
-                PC.Button {
-                    enabled: root.selected && root.selected.status === "running"
-                    text: root.tr("Abbrechen")
-
-                    onClicked: root.action("cancel")
-                }
+                onClicked: root.action("cancel")
             }
-            RowLayout {
-                PC.Button {
-                    enabled: root.selected && root.selected.status !== "running"
-                    objectName: "backupKeyButton"
-                    text: root.tr("Passwort …")
+            PC.Button {
+                id: moreButton
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
+                icon.name: "view-more-symbolic"
+                objectName: "backupMoreButton"
+                text: root.tr("Weitere Aktionen …")
+                Accessible.role: Accessible.ButtonMenu
 
-                    onClicked: root.dialog("keys")
-                }
-                PC.Button {
-                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: root.tr("Initialisieren")
-
-                    onClicked: root.action("init")
-                }
-                PC.Button {
-                    enabled: !!root.selected
-                    text: root.tr("Protokoll")
-
-                    onClicked: root.dialog("logs")
-                }
+                onClicked: actionsMenu.popup(moreButton, 0, moreButton.height)
             }
-            RowLayout {
-                PC.Button {
-                    enabled: !root.running
-                    text: root.tr("Zeitpläne aktivieren")
+        }
+        PC.Switch {
+            Layout.fillWidth: true
+            visible: !root.browser
+            checked: root.autostart
+            text: root.tr("Autostart bei KDE-Anmeldung")
 
-                    onClicked: root.action("install")
-                }
-                PC.Button {
-                    enabled: !root.running
-                    text: root.tr("Pausieren")
-
-                    onClicked: root.action("pause")
-                }
+            onToggled: root.call("Autostart", [checked], result => {
+                if (!result.ok)
+                    root.message = result.error;
+                root.refresh();
+            })
+        }
+        PC.Menu {
+            id: actionsMenu
+            PC.MenuItem {
+                enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
+                text: root.tr("Prüfen")
+                onTriggered: root.action("check")
             }
-            PC.Switch {
-                checked: root.autostart
-                text: root.tr("Autostart bei KDE-Anmeldung")
-
-                onToggled: root.call("Autostart", [checked], result => {
-                    if (!result.ok)
-                        root.message = result.error;
-                    root.refresh();
-                })
+            PC.MenuItem {
+                enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
+                text: root.tr("Testlauf")
+                onTriggered: root.action("backup", {dry_run: true})
+            }
+            PC.MenuSeparator {}
+            PC.MenuItem {
+                enabled: root.selected && root.selected.status !== "running"
+                objectName: "backupKeyButton"
+                text: root.tr("Passwort …")
+                onTriggered: root.dialog("keys")
+            }
+            PC.MenuItem {
+                enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
+                text: root.tr("Initialisieren")
+                onTriggered: root.action("init")
+            }
+            PC.MenuItem {
+                enabled: !!root.selected
+                text: root.tr("Protokoll")
+                onTriggered: root.dialog("logs")
+            }
+            PC.MenuSeparator {}
+            PC.MenuItem {
+                enabled: !root.running
+                text: root.tr("Zeitpläne aktivieren")
+                onTriggered: root.action("install")
+            }
+            PC.MenuItem {
+                enabled: !root.running
+                text: root.tr("Pausieren")
+                onTriggered: root.action("pause")
             }
         }
         PC.Label {
             Layout.fillWidth: true
             elide: Text.ElideRight
-            maximumLineCount: 5
+            maximumLineCount: 2
             text: root.tr(root.message)
+            QQC2.ToolTip.visible: messageHover.hovered
+            QQC2.ToolTip.text: text
+            HoverHandler { id: messageHover }
             visible: !!root.message
             wrapMode: Text.Wrap
         }

@@ -54,6 +54,11 @@ Dateien. Durch Deduplizierung und Kompression entspricht sie nicht der tatsächl
 Netzwerkübertragung zur NAS. Ohne aktuelle Fortschrittsdaten wird keine veraltete
 Geschwindigkeit oder Restzeitschätzung angezeigt.
 
+Die Live-Daten des ausgewählten Ziels bleiben ohne Scrollen sichtbar. Bei mehreren
+Zielen erfolgt die Auswahl über eine Dropdown-Liste. Die Hauptaktionen nutzen
+zwei gleich breite Spalten; Prüfen, Testlauf, Passwort, Initialisieren, Protokoll
+und die Zeitplansteuerung stehen unter **Weitere Aktionen …** zur Verfügung.
+
 ## Sprache der Oberfläche
 
 Unter **Einstellungen → Quellen & Ziele → Sprache** stehen **Systemsprache verwenden**,

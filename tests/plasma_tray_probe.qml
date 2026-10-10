@@ -9,6 +9,7 @@ Timer {
     property var delegate: null
     property var tray: null
     property bool progressObserved: false
+    property string expectedLanguage: "en"
 
     function check(condition, message) {
         if (!condition)
@@ -34,6 +35,32 @@ Timer {
                 return found;
         }
         return null;
+    }
+    function fullyVisible(item) {
+        const popup = root.fullRepresentationItem;
+        check(item && item.visible && item.width > 0 && item.height > 0, "item has visible geometry");
+        const point = item.mapToItem(popup, 0, 0);
+        check(point.x >= -1 && point.y >= -1 && point.x + item.width <= popup.width + 1 &&
+              point.y + item.height <= popup.height + 1, "whole item fits the compact popup: " + item.objectName);
+        for (let parent = item.parent; parent && parent !== popup; parent = parent.parent) {
+            if (parent.clip) {
+                const local = item.mapToItem(parent, 0, 0);
+                check(local.y >= -1 && local.y + item.height <= parent.height + 1,
+                      "no scroll viewport clips the metrics: " + item.objectName);
+            }
+        }
+    }
+    function checkButtons() {
+        const popup = root.fullRepresentationItem;
+        const names = ["backupNowButton", "backupRestoreButton", "backupCancelButton", "backupMoreButton"];
+        const buttons = names.map(name => findButton(popup, name));
+        buttons.forEach(button => fullyVisible(button));
+        check(Math.abs(buttons[0].width - buttons[1].width) < 1 &&
+              Math.abs(buttons[2].width - buttons[3].width) < 1, "action columns have equal width");
+        check(buttons[0].width + buttons[1].width > popup.width * 0.95,
+              "actions use the available popup width");
+        check(buttons[0].mapToItem(popup, 0, 0).x < buttons[1].mapToItem(popup, 0, 0).x,
+              "actions are arranged in two columns");
     }
     onTriggered: {
         if (step === 0) {
@@ -67,11 +94,15 @@ Timer {
         } else if (step === 4) {
             checkPopup();
             console.info("TIMEMACHINE_ACTIVATE_READY");
+            // Reproduce the small viewport in the user's screenshot instead
+            // of accepting labels that exist underneath a clipped ScrollView.
+            root.fullRepresentationItem.width = 420;
+            root.fullRepresentationItem.height = 380;
         } else if (step === 5) {
             const backup = findButton(root.fullRepresentationItem, "backupNowButton");
-            check(root.language === "en" && backup.text === "Back up now", "English popup follows saved language");
-            check(root.tr("Einstellungen") === "Settings", "English settings label");
-            console.info("TIMEMACHINE_ENGLISH_UI_READY");
+            check(root.language === expectedLanguage && backup.text === root.tr("Jetzt sichern"), "popup follows saved language");
+            checkButtons();
+            console.info("TIMEMACHINE_LOCALIZED_UI_READY");
             check(root.selected && !root.selected.has_key, "test destination has no password");
             check(backup && backup.enabled, "backup enabled without optional password");
             check(trayInput.mouseClick(backup, backup.width / 2, backup.height / 2,
@@ -84,25 +115,37 @@ Timer {
                 const bar = findButton(root.fullRepresentationItem, "backupLiveProgressBar");
                 const detail = findButton(root.fullRepresentationItem, "backupLiveProgressDetails");
                 const speed = findButton(root.fullRepresentationItem, "backupLiveProgressSpeed");
+                const timing = findButton(root.fullRepresentationItem, "backupLiveProgressTiming");
                 check(bar && bar.visible && !bar.indeterminate && Math.abs(bar.value - live.percent) < 0.001,
                       "live progress bar shows native fraction");
-                check(detail && detail.visible && detail.text.includes("%") && detail.text.includes("Processed:"),
+                check(detail && detail.visible && detail.text.includes("%") && detail.text.includes("/"),
                       "processed and total source bytes visible");
-                check(speed && speed.visible && speed.text.includes("Processing:") && speed.text.includes("/s"),
+                check(speed && speed.visible && speed.text.includes(root.tr("Verarbeitung: {p0}").split("{p0}")[0]) && speed.text.includes("/s"),
                       "live source processing rate visible");
-                if (!progressObserved)
+                [bar, detail, speed, timing].forEach(item => fullyVisible(item));
+                checkButtons();
+                if (!progressObserved) {
                     console.info("TIMEMACHINE_LIVE_PROGRESS_READY");
+                    console.info("TIMEMACHINE_COMPACT_LAYOUT_READY");
+                }
                 progressObserved = true;
             }
             if (!root.selected.last_success || root.selected.status === "running")
                 return;
             check(progressObserved, "real backup showed live progress before completion");
             console.info("TIMEMACHINE_PASSWORDLESS_BACKUP_READY");
-            const key = findButton(root.fullRepresentationItem, "backupKeyButton");
-            check(key && key.enabled, "password button enabled");
-            check(trayInput.mouseClick(key, key.width / 2, key.height / 2,
-                                      Qt.LeftButton, Qt.NoModifier, 10), "password click delivered");
+            const more = findButton(root.fullRepresentationItem, "backupMoreButton");
+            check(trayInput.mouseClick(more, more.width / 2, more.height / 2,
+                                      Qt.LeftButton, Qt.NoModifier, 10), "more actions click delivered");
         } else if (step === 7) {
+            const menu = root.fullRepresentationItem.actionsMenu;
+            check(menu.opened && menu.count === 9, "maintenance actions remain accessible in the menu");
+            const key = menu.itemAt(3);
+            check(key && key.enabled && key.objectName === "backupKeyButton", "password menu item enabled");
+            check(trayInput.mouseClick(key, key.width / 2, key.height / 2,
+                                      Qt.LeftButton, Qt.NoModifier, 10), "password menu click delivered");
+            console.info("TIMEMACHINE_ACTION_MENU_READY");
+        } else if (step === 8) {
             root.call("Status", [], result => {
                 check(result.key_dialog_visible, "password window visible after popup handoff");
                 console.info("TIMEMACHINE_KEY_DIALOG_READY");

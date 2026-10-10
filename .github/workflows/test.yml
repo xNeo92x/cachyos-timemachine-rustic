@@ -62,7 +62,8 @@ jobs:
               time.sleep(0.05)
           PY
           openbox > /tmp/openbox.log 2>&1 &
-          dbus-run-session -- bash tests/plasma_smoke.sh
+          dbus-run-session -- bash tests/plasma_smoke.sh en
+          dbus-run-session -- bash tests/plasma_smoke.sh de
       - name: Open and accept KDE file choosers with a Wayland parent and child
         if: always()
         run: |
