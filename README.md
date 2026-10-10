@@ -49,10 +49,19 @@ verarbeiteter und gesamter Datenmenge, Verarbeitungsgeschwindigkeit, Laufzeit
 und geschätzter Restzeit. Die Anzeige aktualisiert sich etwa jede Sekunde.
 Solange rustic die Gesamtgröße noch ermittelt, erscheinen bereits die verarbeiteten
 Bytes und die Geschwindigkeit; der Balken bleibt bis dahin unbestimmt.
-Die Geschwindigkeit zählt verarbeitete Quelldaten einschließlich unveränderter
-Dateien. Durch Deduplizierung und Kompression entspricht sie nicht der tatsächlichen
-Netzwerkübertragung zur NAS. Ohne aktuelle Fortschrittsdaten wird keine veraltete
-Geschwindigkeit oder Restzeitschätzung angezeigt.
+**Verarbeitung (Ø)** zeigt den Durchschnitt der verarbeiteten Quelldaten seit Beginn
+der aktuellen Phase, einschließlich unveränderter Dateien. Auch während rustic
+keine neuen Meldungen liefert, werden Laufzeit, Durchschnitt und Restzeitschätzung
+weiter aktualisiert. Wartezeiten senken den Durchschnitt; eine Pause lässt die
+Anzeige nicht mehr nach drei Sekunden auf „–“ springen. Die Restzeit bleibt eine
+Schätzung und wird erst bei bekannter Gesamtgröße angezeigt.
+
+Bei SMB-Zielen zeigt **Repository-Schreiben** zusätzlich die Rate verschlüsselter
+und komprimierter Pack-Daten, die an das NAS-Dateisystem geschrieben werden.
+Sie wird über etwa zehn Sekunden gemittelt, einschließlich Schreibpausen. Das
+ist kein Messwert der physischen Netzwerkkarte: KDE/SMB und das NAS können puffern.
+Durch Deduplizierung, unveränderte Dateien und Kompression kann diese Rate deutlich
+unter der Verarbeitungsgeschwindigkeit liegen.
 
 Die Live-Daten des ausgewählten Ziels bleiben ohne Scrollen sichtbar. Bei mehreren
 Zielen erfolgt die Auswahl über eine Dropdown-Liste. Die Hauptaktionen nutzen
@@ -214,6 +223,7 @@ Dateibackup mit Versionshistorie, kein bootfähiges Systemabbild.
 | `password_file` | Alternative Passwortdatei, muss Rechte 0600 besitzen |
 | `password_command` | Alternativer rustic-Passwortbefehl; nicht zusammen mit `password_file` |
 | `options` | String-Werte für rustic `[repository.options]` |
+| `nas_backend` | SMB: `buffered` (Standard) oder `local` für den bisherigen KIO-FUSE-Schreibweg |
 | `env_file` | Pfad einer JSON-Datei mit Umgebungsvariablen für dieses Ziel |
 | `env` | Direkt definierte Umgebungsvariablen für dieses Ziel |
 
@@ -255,8 +265,25 @@ Repository-Adresse gespeichert; SMB benötigt keine Backend-Optionen.
 
 Vor jedem rustic-Aufruf verbindet die Anwendung die gespeicherte Adresse neu
 über den offiziellen [KIO-FUSE-D-Bus-Dienst](https://github.com/KDE/kio-fuse#usage).
-rustic verarbeitet das Repository anschließend als Dateisystem. Der geöffnete
-Netzwerkordner bleibt während des Aufrufs an dieses Dateisystem gebunden.
+Für SMB verwendet die Anwendung standardmäßig einen privaten, nur während des
+Aufrufs laufenden REST-Adapter auf `127.0.0.1` mit einem zufälligen Zugriffstoken.
+Er bündelt rustic-Uploads in Blöcke von bis zu 1 MiB, bevor sie an KIO-FUSE gehen.
+Das reduziert die vielen kleinen Schreibaufrufe des lokalen rustic-Backends;
+KIO-FUSE/SMB kann große Blöcke seinerseits weiter aufteilen. Es werden weder ein
+zusätzlicher Dienst installiert noch globale KDE-Einstellungen geändert.
+
+Das vorhandene Repository behält sein verschlüsseltes rustic-Dateiformat und kann
+weiter direkt mit rustic gelesen werden. Uploads verwenden temporäre Dateien;
+erst nach vollständigem Schreiben und erfolgreichem `fsync` werden sie umbenannt.
+Der geöffnete Netzwerkordner bleibt während des Aufrufs an das verbundene
+Dateisystem gebunden. Die Geschwindigkeit auf dem eigenen NAS hängt weiterhin
+von Netzwerk, NAS, Quelldaten und Kompression ab; der Adapter garantiert keine
+bestimmte Übertragungsrate.
+
+Für einen Vergleich kann beim betreffenden Ziel in `config.json` ausdrücklich
+`"nas_backend": "local"` gesetzt werden. Damit verwendet rustic den bisherigen
+direkten KIO-FUSE-Schreibweg ohne zusätzliche Repository-Schreibanzeige. Mit
+`"nas_backend": "buffered"` oder ohne diesen Eintrag ist der gebufferte Weg aktiv.
 Bei fehlender Verbindung wird mit einer verständlichen Meldung abgebrochen;
 ein lokales Ersatz-Repository wird nicht angelegt. KIO-Mounts sind automatisch
 vom Backup ausgeschlossen. Ohne angemeldete KDE-Sitzung bitte einen dauerhaften

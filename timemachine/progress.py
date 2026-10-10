@@ -12,7 +12,6 @@ from collections import deque
 
 from .i18n import language, tr
 
-STALE_SECONDS = 3.0
 COUNTERS = {
     "seconds_elapsed", "seconds_remaining", "percent_done", "total_bytes", "bytes_done",
     "files_new", "files_changed", "files_unmodified", "dirs_new", "dirs_changed", "dirs_unmodified",
@@ -29,6 +28,8 @@ class ProgressTracker:
     def __init__(self):
         self.started = time.monotonic()
         self.samples = deque([(self.started, 0)])
+        self.phase_started = time.time()
+        self.repository_samples = deque([(self.started, 0)])
         self.value = {}
 
     def feed(self, event):
@@ -57,8 +58,10 @@ class ProgressTracker:
             or (elapsed is not None and previous_elapsed is not None and elapsed < previous_elapsed)
         ):
             self.samples.clear()  # A new byte progress phase; never reuse its predecessor's rate.
-            self.value = {}
-        value = {**self.value, **event, "updated_at_epoch": time.time()}
+            self.phase_started = time.time()
+            self.value = {k: v for k, v in self.value.items() if k.startswith("repository_")}
+        value = {**self.value, **event, "updated_at_epoch": time.time(),
+                 "phase_started_at_epoch": self.phase_started}
         if done is not None:
             value["bytes_done"] = done
             self.samples.append((stamp, done))
@@ -84,6 +87,18 @@ class ProgressTracker:
             value["seconds_elapsed"] = elapsed
         self.value = value
         return value
+
+    def repository(self, written):
+        """A heartbeat includes quiet periods in repository write throughput."""
+        stamp = time.monotonic()
+        self.repository_samples.append((stamp, written))
+        while len(self.repository_samples) > 2 and self.repository_samples[1][0] < stamp - 10:
+            self.repository_samples.popleft()
+        age = stamp - self.repository_samples[0][0]
+        self.value = {**self.value, "repository_bytes_written": written,
+                      "repository_bytes_per_second": max(0, (written - self.repository_samples[0][1]) / age) if age > 0 else 0,
+                      "repository_updated_at_epoch": time.time()}
+        return self.value
 
 
 def human_size(value):
@@ -124,18 +139,26 @@ def progress_view(row, now_epoch=None):
             percentage = percentage.replace(".", ",")
         detail = percentage + " % · " + detail
     updated = number(value.get("updated_at_epoch"))
-    fresh = updated is not None and 0 <= now_epoch - updated <= STALE_SECONDS
-    rate = number(value.get("bytes_per_second")) if fresh else None
-    speed = tr("Verarbeitung: {p0}", p0=human_size(rate) + "/s" if rate is not None else "–")
     elapsed = number(value.get("seconds_elapsed")) or 0
     try:
         elapsed = max(0, now_epoch - dt.datetime.fromisoformat(row["started_at"]).timestamp())
     except (KeyError, TypeError, ValueError):
         if updated is not None:
             elapsed += max(0, now_epoch - updated)
+    phase_started = number(value.get("phase_started_at_epoch"))
+    phase_elapsed = max(0, now_epoch - phase_started) if phase_started is not None else elapsed
+    rate = done / phase_elapsed if done is not None and phase_elapsed > 0 else None
+    speed = tr("Verarbeitung (Ø): {p0}", p0=human_size(rate) + "/s" if rate is not None else "–")
+    repository_rate = number(value.get("repository_bytes_per_second"))
+    repository_updated = number(value.get("repository_updated_at_epoch"))
+    if repository_rate is not None and repository_updated is not None:
+        # A stopped worker must not leave a frozen positive write speed behind.
+        if now_epoch - repository_updated > 3:
+            repository_rate = 0
+        speed += "\n" + tr("Repository-Schreiben: {p0}", p0=human_size(repository_rate) + "/s")
     timing = tr("Verstrichen: {p0}", p0=duration(elapsed))
-    remaining = number(value.get("seconds_remaining"))
-    if fresh and remaining is not None and percent != 1 and total:
+    remaining = max(0, total - done) / rate if total and done is not None and rate else None
+    if remaining is not None and percent != 1:
         timing += " · " + tr("Verbleibend: ca. {p0}", p0=duration(remaining))
     return {
         "active": active,
@@ -143,5 +166,5 @@ def progress_view(row, now_epoch=None):
         "detail": detail,
         "speed": speed,
         "timing": timing,
-        "speed_hint": tr("Verarbeitete Quelldaten pro Sekunde, einschließlich unveränderter Dateien. Durch Deduplizierung und Kompression kann die tatsächliche Netzwerkübertragung kleiner sein."),
+        "speed_hint": tr("Verarbeitung: Durchschnitt der Quelldaten seit Beginn dieser Phase, einschließlich unveränderter Dateien. Repository-Schreiben: verschlüsselte und komprimierte Pack-Daten, die an das NAS-Dateisystem geschrieben wurden, über etwa 10 Sekunden gemittelt. Kein Messwert der physischen Netzwerkverbindung."),
     }

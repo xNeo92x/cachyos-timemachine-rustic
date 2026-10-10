@@ -48,10 +48,17 @@ During a backup, the popup shows live progress with percentage, processed and
 total data, processing speed, elapsed time and estimated remaining time. It
 updates about once per second. While rustic is still calculating the total
 size, processed bytes and speed are already shown, with an indeterminate bar.
-The speed counts processed source bytes, including unchanged files. Deduplication
-and compression mean it does not measure actual network traffic to the NAS.
-Without fresh progress data, an outdated speed or remaining-time estimate is
-not displayed.
+**Processing (avg.)** shows the average source bytes processed since the current
+phase began, including unchanged files. Elapsed time, average speed and remaining
+time continue updating between rustic messages. Waiting lowers the average;
+a pause no longer replaces the speed with “–” after three seconds. Remaining
+time is an estimate and appears only when the total size is known.
+
+For SMB destinations, **Repository writes** also shows the rate of encrypted and
+compressed pack bytes written to the NAS filesystem. It is averaged over about
+ten seconds, including pauses. This does not measure physical network traffic:
+KDE/SMB and the NAS can buffer writes. Deduplication, unchanged files and compression
+can make this rate much lower than the processing rate.
 
 The selected destination's live metrics remain visible without scrolling. With
 multiple destinations, use the dropdown to switch between them. The main actions
@@ -208,6 +215,7 @@ not a bootable system image.
 | `password_file` | Alternative password file; requires 0600 permissions |
 | `password_command` | Alternative rustic password command; cannot be combined with `password_file` |
 | `options` | String values for rustic `[repository.options]` |
+| `nas_backend` | SMB: `buffered` (default) or `local` for the previous KIO-FUSE write path |
 | `env_file` | Path to a JSON file containing environment variables for this destination |
 | `env` | Environment variables defined directly for this destination |
 
@@ -247,8 +255,24 @@ are not stored in the repository URL; SMB requires no backend options.
 
 Before each rustic invocation, the application reconnects the saved URL through
 the official [KIO-FUSE D-Bus service](https://github.com/KDE/kio-fuse#usage).
-rustic then accesses the repository as a filesystem. The opened network folder
-stays bound to that filesystem during the operation. Missing connections produce
+For SMB, the app defaults to a private REST adapter on `127.0.0.1`, running only
+for the duration of the rustic invocation and protected by a random access token.
+It coalesces rustic uploads into blocks of up to 1 MiB before writing to KIO-FUSE.
+This reduces the many small writes from rustic's local backend; KIO-FUSE/SMB may
+split these blocks further. No additional service is installed and no global KDE
+settings are changed.
+
+Existing repositories retain their encrypted rustic file format and can still be
+read directly with rustic. Uploads use temporary files and are renamed only after
+complete writing and a successful `fsync`. The opened network folder remains
+pinned to the connected filesystem for the operation. Performance on your NAS
+still depends on the network, NAS, source data and compression; the adapter does
+not guarantee a particular transfer rate.
+
+To compare both paths, explicitly set `"nas_backend": "local"` for the destination
+in `config.json`. This uses the previous direct KIO-FUSE write path without the
+additional repository write metric. `"nas_backend": "buffered"`, or omitting this
+setting, enables buffered writes. Missing connections produce
 a clear error; no local replacement repository is created. KIO mounts are
 automatically excluded from backups. Without a logged-in KDE session, use a
 persistent SMB/NFS mount or a direct rustic backend such as SFTP.

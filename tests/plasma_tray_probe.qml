@@ -120,7 +120,7 @@ Timer {
                       "live progress bar shows native fraction");
                 check(detail && detail.visible && detail.text.includes("%") && detail.text.includes("/"),
                       "processed and total source bytes visible");
-                check(speed && speed.visible && speed.text.includes(root.tr("Verarbeitung: {p0}").split("{p0}")[0]) && speed.text.includes("/s"),
+                check(speed && speed.visible && speed.text.includes(root.tr("Verarbeitung (Ø): {p0}").split("{p0}")[0]) && speed.text.includes("/s"),
                       "live source processing rate visible");
                 [bar, detail, speed, timing].forEach(item => fullyVisible(item));
                 checkButtons();

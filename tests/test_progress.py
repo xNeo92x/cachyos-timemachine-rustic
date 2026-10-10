@@ -76,16 +76,16 @@ def row():
 
 
 @pytest.mark.parametrize("language,detail,speed,timing", [
-    ("de", "50,0 % · Verarbeitet: 1.0 MiB / 2.0 MiB", "Verarbeitung: 1.0 MiB/s", "Verstrichen: 00:00:11 · Verbleibend: ca. 00:00:10"),
-    ("en", "50.0 % · Processed: 1.0 MiB / 2.0 MiB", "Processing: 1.0 MiB/s", "Elapsed: 00:00:11 · Remaining: about 00:00:10"),
+    ("de", "50,0 % · Verarbeitet: 1.0 MiB / 2.0 MiB", "Verarbeitung (Ø): 93.1 KiB/s", "Verstrichen: 00:00:11 · Verbleibend: ca. 00:00:11"),
+    ("en", "50.0 % · Processed: 1.0 MiB / 2.0 MiB", "Processing (avg.): 93.1 KiB/s", "Elapsed: 00:00:11 · Remaining: about 00:00:11"),
 ])
-def test_live_view_is_localized_and_stale_speed_eta_disappear(language, detail, speed, timing):
+def test_live_average_accounts_for_pauses_without_disappearing(language, detail, speed, timing):
     configure(language)
     view = progress.progress_view(row(), now_epoch=1011)
     assert view["active"] and view["percent"] == 0.5
     assert (view["detail"], view["speed"], view["timing"]) == (detail, speed, timing)
     stale = progress.progress_view(row(), now_epoch=1015)
-    assert stale["detail"] == detail and stale["speed"].endswith("–")
+    assert stale["detail"] == detail and "68.3 KiB/s" in stale["speed"]
     assert stale["timing"].endswith("00:00:15")
     unknown = row()
     del unknown["progress"]["total_bytes"]
@@ -98,21 +98,24 @@ def test_live_view_is_localized_and_stale_speed_eta_disappear(language, detail, 
     assert not progress.progress_view(unknown)["active"]
 
 
-def test_qt_and_dbus_export_same_live_metrics(configured):
+def test_qt_and_dbus_export_same_live_metrics(configured, monkeypatch):
     app = QApplication.instance() or QApplication([])
     engine, _, _ = configured
     window = Window(engine.config_dir, engine.state_dir, native_panel=True)
     try:
         with engine.operation("test", "backup"):
             data = row()["progress"]
-            data["updated_at_epoch"] = time.time()
+            stamp = time.time()
+            data["updated_at_epoch"] = stamp
+            data["phase_started_at_epoch"] = stamp - 10
+            monkeypatch.setattr(progress.time, "time", lambda: stamp)
             engine.update("test", progress=data)
             window.refresh()
             exported = json.loads(Bridge(window).Status())["destinations"][0]["progress_view"]
             assert exported["active"] and exported["percent"] == 0.5
             assert "50,0 %" in window.progress_details.text()
             assert exported["speed"] in window.progress_details.text()
-            assert "1.0 MiB/s" in exported["speed"]
+            assert "(Ø)" in exported["speed"] and not exported["speed"].endswith("–")
             assert window.progress.maximum() == 1000 and window.progress.value() == 500
         window.refresh()
         assert window.progress.isHidden() and window.progress_details.isHidden()
@@ -159,3 +162,24 @@ def test_real_backup_reports_progress_before_finishing_even_with_numeric_passwor
         if process.poll() is None:
             process.kill()
             process.wait()
+
+
+def test_repository_rate_heartbeat_includes_idle_time_and_reset(clock):
+    tracker = progress.ProgressTracker()
+    clock[0] += 1
+    event = tracker.repository(1024)
+    assert event["repository_bytes_per_second"] == 1024
+    clock[0] += 1
+    assert tracker.repository(1024)["repository_bytes_per_second"] == 512
+    tracker.feed({"message_type": "status", "bytes_done": 1024})
+    clock[0] += 1
+    event = tracker.feed({"message_type": "status", "bytes_done": 0})
+    assert event["phase_started_at_epoch"] == 1103
+    assert event["repository_bytes_written"] == 1024
+    clock[0] += 12
+    assert tracker.repository(1024)["repository_bytes_per_second"] == 0
+    data = row()
+    data["progress"].update(tracker.value)
+    view = progress.progress_view(data, now_epoch=1115)
+    assert "Repository-Schreiben: 0.0 B/s" in view["speed"]
+    assert "physisch" in view["speed_hint"]

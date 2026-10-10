@@ -1,5 +1,6 @@
 """CI only: real Samba -> KIO FUSE -> rustic, on an isolated session bus."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -68,6 +69,42 @@ def main():
         engine.set_key("nas", "test-only-password")
         assert engine.snapshots("nas")[0]["id"] == snapshot
         print("NAS_PASSWORDLESS_FIRST_BACKUP_AND_OPTIONAL_PASSWORD_OK", flush=True)
+        # Compare identical incompressible input on two fresh SMB repositories.
+        # Initialization, retention and verification are outside the timed backup.
+        benchmark_source = base / "benchmark-source"
+        benchmark_source.mkdir()
+        data = os.urandom(32 * 1024 ** 2)
+        (benchmark_source / "unique.bin").write_bytes(data)
+        measurements = {}
+        for backend in ("local", "buffered"):
+            repository = base / "share" / ("benchmark-" + backend)
+            repository.mkdir()
+            settings = {
+                "source": str(benchmark_source), "rustic_binary": config["rustic_binary"],
+                "destinations": [{"name": backend, "repository": "smb://guest@127.0.0.1/Backups/benchmark-" + backend,
+                                  "nas_backend": backend}],
+            }
+            config_dir = base / ("benchmark-config-" + backend)
+            atomic(config_dir / "config.json", settings)
+            measured = Engine(config_dir, base / ("benchmark-state-" + backend))
+            measured.initialize(backend)
+            started = time.monotonic()
+            with measured.operation(backend, "backup"):
+                measured.run(backend, ["backup", "--json", str(benchmark_source)], progress=True, timeout=None)
+            elapsed = time.monotonic() - started
+            measurements[backend] = {"seconds": round(elapsed, 3), "MiB_per_second": round(32 / elapsed, 3)}
+            if backend == "buffered":
+                assert measured.state(backend)["progress"]["repository_bytes_written"] >= len(data)
+            measured.run(backend, ["check", "--read-data"], timeout=None)
+            saved = measured.snapshots(backend)[0]["id"]
+            result = measured.restore(backend, saved, str(benchmark_source / "unique.bin"), str(base / ("verified-" + backend)))
+            assert Path(result["restored"]).read_bytes() == data
+            # Same encrypted file layout remains directly readable by rustic.
+            direct = base / ("direct-" + backend + ".toml")
+            direct.write_text('[repository]\nrepository = ' + json.dumps(str(repository)) + '\npassword = ""\n')
+            subprocess.run([config["rustic_binary"], "--no-progress", "-P", str(direct), "check", "--read-data"], check=True)
+        print("NAS_BUFFERED_VS_LOCAL_BENCHMARK " + json.dumps(measurements), flush=True)
+        print("NAS_BUFFERED_PROTOCOL_FULL_READ_AND_RESTORE_OK", flush=True)
         # Simulate another login with a different FUSE mountpoint.
         child.terminate()
         child.wait(timeout=10)

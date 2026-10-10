@@ -20,6 +20,7 @@ import uuid
 from pathlib import Path, PurePosixPath
 
 from .i18n import CHOICES, configure, tr
+from .nasbridge import NasBridge
 from .network import NetworkError, is_smb, kio_mounts, repository_access, smb_url
 from .progress import ProgressTracker
 
@@ -89,6 +90,8 @@ def validate(config):
         ):
             raise Error(tr("Zielnamen müssen eindeutig sein und nur Buchstaben, Ziffern, _ oder - enthalten."))
         names.add(name)
+        if dest.get("nas_backend", "buffered") not in ("buffered", "local"):
+            raise Error(tr("nas_backend muss buffered oder local sein."))
         if not isinstance(dest.get("repository"), str) or not dest["repository"]:
             raise Error(tr("Repository fehlt für {p0}.", p0=name))
         if is_smb(dest["repository"]):
@@ -548,6 +551,7 @@ class Engine:
             tmp = access.enter_context(tempfile.TemporaryDirectory(prefix="profile-", dir=self.folder(name)))
             profile = Path(tmp) / "engine.toml"
             inherited = ()
+            bridge = None
             if hook:
                 command = ["/bin/sh", "-c", hook]
             else:
@@ -565,6 +569,11 @@ class Engine:
                             literal = re.sub(r"([\\*?\[\]{}!])", r"\\\1", str(root))
                             patterns += "\n!" + literal + "\n!" + literal.rstrip("/") + "/**\n"
                         atomic(globs, patterns)
+                    if dest.get("nas_backend", "buffered") == "buffered":
+                        bridge = access.enter_context(NasBridge(repository))
+                        repository = bridge.url
+                        secrets.append(bridge.token)
+                        inherited = ()
                 if self.cancelled:
                     raise Error(tr("Vorgang abgebrochen."))
                 atomic(profile, self._profile(dest, repository))
@@ -594,6 +603,7 @@ class Engine:
             aborted_at = None
             pending = {"out": b"", "err": b""}
             tracker = ProgressTracker() if progress else None
+            heartbeat = started
             try:
                 with selectors.DefaultSelector() as sel:
                     sel.register(self.child.stdout, selectors.EVENT_READ, "out")
@@ -650,7 +660,12 @@ class Engine:
                                             self.log(name, text)
                                 elif not capture:
                                     self.log(name, text)
+                        if tracker is not None and bridge is not None and time.monotonic() - heartbeat >= 0.5:
+                            self.update(name, progress=tracker.repository(bridge.bytes_written()))
+                            heartbeat = time.monotonic()
                 code = self.child.wait()
+                if tracker is not None and bridge is not None:
+                    self.update(name, progress=tracker.repository(bridge.bytes_written()))
                 if self.cancelled:
                     raise Error(tr("Vorgang abgebrochen."))
                 if code:
