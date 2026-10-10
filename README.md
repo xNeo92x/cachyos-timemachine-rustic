@@ -12,6 +12,13 @@ Plasma übernimmt Positionierung, Theme und Popup-Verhalten auch unter Wayland.
 Ein Python/PySide6-Dienst verbindet das Miniprogramm über den Sitzungs-D-Bus mit
 der rustic-CLI. Einstellungs-, Schlüssel- und Protokolldialoge bleiben Qt-Dialoge.
 
+## Hinweis zur Entstehung und Weiterentwicklung
+
+Dieses komplette Projekt wurde mit **ChatGPT** erstellt. Vorzugsweise sollte
+jemand das Projekt **forken**, den Code prüfen und optimieren sowie die weitere
+Entwicklung und Pflege übernehmen. Forks zur Verbesserung und langfristigen
+Weiterführung des Projekts sind ausdrücklich erwünscht.
+
 ## Funktionen
 
 - Ein ruhiges Leisten-Symbol; rot bei Fehlern oder überfälligem Backup,

@@ -12,6 +12,13 @@ handles positioning, theme and popup behavior, including on Wayland.
 A Python/PySide6 service connects the applet to the rustic CLI over the session
 D-Bus. Settings, password management and logs use Qt dialogs.
 
+## Project creation and continued development
+
+This entire project was created with **ChatGPT**. Ideally, someone should
+**fork** the project, review and optimize the code, and take over its continued
+development and maintenance. Forks aimed at improving and maintaining the
+project over the long term are explicitly encouraged.
+
 ## Features
 
 - A panel icon with a status dot: red for errors or overdue backups, blue during
