@@ -58,6 +58,7 @@ lock directory = {samba}
 state directory = {samba}
 cache directory = {samba}
 private dir = {samba}
+ncalrpc dir = {samba}/ncalrpc
 [NAS]
 path = {share}
 guest ok = yes
