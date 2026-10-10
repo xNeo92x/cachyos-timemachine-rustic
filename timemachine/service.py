@@ -22,6 +22,7 @@ from .integration import (
     reload_dbus_services,
     set_autostart,
 )
+from .progress import progress_view
 
 
 def encoded(value):
@@ -51,6 +52,7 @@ class Bridge(QObject):
                     status_text=status_text(row),
                     last_success_text=date(row.get("last_success")),
                     size_text=human_size(row.get("repository_bytes")),
+                    progress_view=progress_view(row),
                 )
                 rows.append(item)
             return encoded(

@@ -31,8 +31,20 @@ base = Path(os.environ['XDG_STATE_HOME']).parent
 source = base / 'source'
 source.mkdir()
 (source / 'file.txt').write_text('Passwordless Plasma backup')
+# Keep a real backup alive across several one-second popup refreshes even on
+# fast CI hosts. Source bytes are unique; progress output is never substituted.
+for index in range(16):
+    (source / f'large-{index}.bin').write_bytes(os.urandom(32 * 1024 ** 2))
+wrapper = base / 'rustic-one-cpu'
+wrapper.write_text('''#!/usr/bin/python
+import os, sys
+os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
+os.execvp('rustic', ['rustic', *sys.argv[1:]])
+''')
+wrapper.chmod(0o700)
 atomic(Path(os.environ['XDG_CONFIG_HOME']) / 'cachyos-time-machine/config.json', {
     'language': 'en',
+    'rustic_binary': str(wrapper),
     'source': str(source), 'destinations': [{'name': 'test', 'repository': str(base / 'repo')}],
 })
 PYSETUP
@@ -80,7 +92,7 @@ set -e
 cat "$task_dir/plasma.log"
 python -m timemachine.cli log --dest test
 [[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
-for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE ENGLISH_UI PASSWORDLESS_BACKUP KEY_DIALOG; do
+for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE ENGLISH_UI LIVE_PROGRESS PASSWORDLESS_BACKUP KEY_DIALOG; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
 if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/(applet|data/plasma/plasmoids/org.cachyos.timemachine)/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then

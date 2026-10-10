@@ -55,17 +55,8 @@ from .filepicker import FilePicker
 from .i18n import apply_ui_language, bind_ui, configure_qt, language, tr, translate_message
 from .integration import autostart_enabled, set_autostart
 from .network import NetworkError, is_smb, mounted_url, smb_url
+from .progress import human_size, progress_view
 from .schedule import ScheduleEditor
-
-
-def human_size(value):
-    if value is None:
-        return "–"
-    value = float(value)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if value < 1024 or unit == "TiB":
-            return f"{value:.1f} {unit}"
-        value /= 1024
 
 
 def date(value):
@@ -871,6 +862,10 @@ class Window(QMainWindow):
         content.addWidget(self.info)
         self.progress = QProgressBar()
         content.addWidget(self.progress)
+        self.progress_details = QLabel()
+        self.progress_details.setWordWrap(True)
+        self.progress_details.setProperty("dynamicLanguage", True)
+        content.addWidget(self.progress_details)
         self.error_label = QLabel()
         self.error_label.setWordWrap(True)
         self.error_label.setObjectName("error")
@@ -919,7 +914,7 @@ class Window(QMainWindow):
         bind_ui(self)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(2000)
+        self.timer.start(1000)
         self.refresh()
 
     def error(self, text):
@@ -1050,13 +1045,16 @@ class Window(QMainWindow):
             + row["repository"]
         )
         running = row.get("status") == "running"
-        progress = row.get("progress", {})
-        self.progress.setVisible(running)
-        percent = progress.get("percent_done")
+        progress = progress_view(row)
+        self.progress.setVisible(progress["active"])
+        self.progress_details.setVisible(progress["active"])
+        self.progress_details.setText(progress["detail"] + "\n" + progress["speed"] + "\n" + progress["timing"])
+        self.progress_details.setToolTip(progress["speed_hint"])
+        percent = progress["percent"]
         if isinstance(percent, (int, float)):
             self.progress.setRange(0, 1000)
             self.progress.setValue(int(max(0, min(1, percent)) * 1000))
-            self.progress.setFormat(f"{percent * 100:.0f}% · {human_size(progress.get('bytes_done'))}")
+            self.progress.setFormat(f"{percent * 100:.1f}%")
         else:
             self.progress.setRange(0, 0)
         error = (

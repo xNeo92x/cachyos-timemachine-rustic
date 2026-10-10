@@ -1,5 +1,5 @@
 pkgname=cachyos-timemachine-rustic-git
-pkgver=0.2.8
+pkgver=0.2.9
 pkgrel=1
 pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
 arch=('any')
@@ -14,7 +14,7 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/cachyos-timemachine-rustic"
-  printf '0.2.8.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf '0.2.9.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {

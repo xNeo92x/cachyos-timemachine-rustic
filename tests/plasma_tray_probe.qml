@@ -8,6 +8,7 @@ Timer {
     property int step: 0
     property var delegate: null
     property var tray: null
+    property bool progressObserved: false
 
     function check(condition, message) {
         if (!condition)
@@ -77,8 +78,25 @@ Timer {
                                       Qt.LeftButton, Qt.NoModifier, 10), "backup click delivered");
         } else if (step === 6) {
             check(!root.selected.backup_error, "popup backup did not fail: " + root.selected.backup_error);
+            const live = root.selected.progress_view;
+            if (root.selected.status === "running" && live && live.percent > 0 && live.percent < 1 &&
+                    root.selected.progress.bytes_per_second > 0) {
+                const bar = findButton(root.fullRepresentationItem, "backupLiveProgressBar");
+                const detail = findButton(root.fullRepresentationItem, "backupLiveProgressDetails");
+                const speed = findButton(root.fullRepresentationItem, "backupLiveProgressSpeed");
+                check(bar && bar.visible && !bar.indeterminate && Math.abs(bar.value - live.percent) < 0.001,
+                      "live progress bar shows native fraction");
+                check(detail && detail.visible && detail.text.includes("%") && detail.text.includes("Processed:"),
+                      "processed and total source bytes visible");
+                check(speed && speed.visible && speed.text.includes("Processing:") && speed.text.includes("/s"),
+                      "live source processing rate visible");
+                if (!progressObserved)
+                    console.info("TIMEMACHINE_LIVE_PROGRESS_READY");
+                progressObserved = true;
+            }
             if (!root.selected.last_success || root.selected.status === "running")
                 return;
+            check(progressObserved, "real backup showed live progress before completion");
             console.info("TIMEMACHINE_PASSWORDLESS_BACKUP_READY");
             const key = findButton(root.fullRepresentationItem, "backupKeyButton");
             check(key && key.enabled, "password button enabled");

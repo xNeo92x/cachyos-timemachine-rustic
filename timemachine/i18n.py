@@ -6,6 +6,13 @@ import re
 
 CHOICES = ("system", "de", "en")
 EN = {
+    "Warte auf Fortschrittsdaten …": "Waiting for progress data …",
+    "Verarbeitet: {p0} / {p1}": "Processed: {p0} / {p1}",
+    "Verarbeitet: {p0} · Gesamtgröße wird ermittelt …": "Processed: {p0} · calculating total size …",
+    "Verarbeitung: {p0}": "Processing: {p0}",
+    "Verstrichen: {p0}": "Elapsed: {p0}",
+    "Verbleibend: ca. {p0}": "Remaining: about {p0}",
+    "Verarbeitete Quelldaten pro Sekunde, einschließlich unveränderter Dateien. Durch Deduplizierung und Kompression kann die tatsächliche Netzwerkübertragung kleiner sein.": "Source bytes processed per second, including unchanged files. Deduplication and compression can make actual network traffic smaller.",
     "Backup-Laufwerk": "Backup drive",
     "Backup-Passwort · {p0}": "Backup password · {p0}",
     "Protokoll · {p0}": "Log · {p0}",

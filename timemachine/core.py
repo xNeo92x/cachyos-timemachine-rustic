@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 
 from .i18n import CHOICES, configure, tr
 from .network import NetworkError, is_smb, kio_mounts, repository_access, smb_url
+from .progress import ProgressTracker
 
 APP = "cachyos-time-machine"
 RETENTION = {"daily": 7, "weekly": 4, "monthly": 12, "yearly": 3}
@@ -202,7 +203,6 @@ class Engine:
         self.cancelled = False
         self.child = None
         self.current = None
-        self.last_progress = 0.0
         self.prepared = set()
 
     @staticmethod
@@ -593,6 +593,7 @@ class Engine:
             started = time.monotonic()
             aborted_at = None
             pending = {"out": b"", "err": b""}
+            tracker = ProgressTracker() if progress else None
             try:
                 with selectors.DefaultSelector() as sel:
                     sel.register(self.child.stdout, selectors.EVENT_READ, "out")
@@ -626,7 +627,8 @@ class Engine:
                             lines = pending[stream].split(b"\n")
                             pending[stream] = lines.pop()
                             for raw in lines:
-                                text = redact(raw.decode("utf-8", "replace"))
+                                decoded = raw.decode("utf-8", "replace")
+                                text = redact(decoded)
                                 if not text:
                                     continue
                                 if stream == "err":
@@ -635,13 +637,17 @@ class Engine:
                                     self.log(name, text)
                                 elif progress:
                                     try:
-                                        event = json.loads(text)
+                                        event = json.loads(decoded)
                                     except ValueError:
                                         self.log(name, text)
                                         continue
                                     if isinstance(event, dict):
                                         warned |= event.get("message_type") in ("error", "exit_error")
-                                        self.update(name, progress=event)
+                                        current = tracker.feed(event)
+                                        if current is not None:
+                                            self.update(name, progress=current)
+                                        else:
+                                            self.log(name, text)
                                 elif not capture:
                                     self.log(name, text)
                 code = self.child.wait()

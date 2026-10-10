@@ -44,6 +44,15 @@ project over the long term are explicitly encouraged.
 - Preparation and failure hooks; logs retained for 30 days.
 - German and English interfaces; system language by default, changeable in Settings.
 
+During a backup, the popup shows live progress with percentage, processed and
+total data, processing speed, elapsed time and estimated remaining time. It
+updates about once per second. While rustic is still calculating the total
+size, processed bytes and speed are already shown, with an indeterminate bar.
+The speed counts processed source bytes, including unchanged files. Deduplication
+and compression mean it does not measure actual network traffic to the NAS.
+Without fresh progress data, an outdated speed or remaining-time estimate is
+not displayed.
+
 ## Interface language
 
 Open **Settings → Sources & destinations → Language** and choose **Use system

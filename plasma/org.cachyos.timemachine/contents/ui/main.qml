@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.plasma.plasmoid
@@ -293,7 +294,9 @@ PlasmoidItem {
                 model: root.rows
 
                 delegate: PC.ItemDelegate {
+                    id: destinationDelegate
                     required property var modelData
+                    readonly property var liveProgress: modelData.progress_view || ({})
 
                     highlighted: root.selected && root.selected.name === modelData.name
                     width: ListView.view.width
@@ -324,9 +327,36 @@ PlasmoidItem {
                         }
                         PC.ProgressBar {
                             Layout.fillWidth: true
-                            indeterminate: !modelData.progress || modelData.progress.percent_done === undefined
-                            value: modelData.progress ? modelData.progress.percent_done || 0 : 0
-                            visible: modelData.status === "running"
+                            objectName: "backupLiveProgressBar"
+                            from: 0
+                            to: 1
+                            indeterminate: typeof destinationDelegate.liveProgress.percent !== "number"
+                            value: typeof destinationDelegate.liveProgress.percent === "number" ? destinationDelegate.liveProgress.percent : 0
+                            visible: !!destinationDelegate.liveProgress.active
+                        }
+                        PC.Label {
+                            Layout.fillWidth: true
+                            objectName: "backupLiveProgressDetails"
+                            text: destinationDelegate.liveProgress.detail || ""
+                            visible: !!destinationDelegate.liveProgress.active
+                            wrapMode: Text.Wrap
+                        }
+                        PC.Label {
+                            Layout.fillWidth: true
+                            objectName: "backupLiveProgressSpeed"
+                            text: destinationDelegate.liveProgress.speed || ""
+                            visible: !!destinationDelegate.liveProgress.active
+                            wrapMode: Text.Wrap
+                            QQC2.ToolTip.visible: speedHover.hovered
+                            QQC2.ToolTip.delay: 500
+                            QQC2.ToolTip.text: destinationDelegate.liveProgress.speed_hint || ""
+                            HoverHandler { id: speedHover }
+                        }
+                        PC.Label {
+                            Layout.fillWidth: true
+                            text: destinationDelegate.liveProgress.timing || ""
+                            visible: !!destinationDelegate.liveProgress.active
+                            wrapMode: Text.Wrap
                         }
                         PC.Label {
                             Layout.fillWidth: true

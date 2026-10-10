@@ -44,6 +44,16 @@ Weiterführung des Projekts sind ausdrücklich erwünscht.
 - Vorbereitungs- und Fehler-Hooks, Protokollaufbewahrung für 30 Tage.
 - Deutsche und englische Oberfläche; Systemsprache als Standard, jederzeit in den Einstellungen änderbar.
 
+Während einer Sicherung zeigt das Popup den Live-Fortschritt mit Prozent,
+verarbeiteter und gesamter Datenmenge, Verarbeitungsgeschwindigkeit, Laufzeit
+und geschätzter Restzeit. Die Anzeige aktualisiert sich etwa jede Sekunde.
+Solange rustic die Gesamtgröße noch ermittelt, erscheinen bereits die verarbeiteten
+Bytes und die Geschwindigkeit; der Balken bleibt bis dahin unbestimmt.
+Die Geschwindigkeit zählt verarbeitete Quelldaten einschließlich unveränderter
+Dateien. Durch Deduplizierung und Kompression entspricht sie nicht der tatsächlichen
+Netzwerkübertragung zur NAS. Ohne aktuelle Fortschrittsdaten wird keine veraltete
+Geschwindigkeit oder Restzeitschätzung angezeigt.
+
 ## Sprache der Oberfläche
 
 Unter **Einstellungen → Quellen & Ziele → Sprache** stehen **Systemsprache verwenden**,
