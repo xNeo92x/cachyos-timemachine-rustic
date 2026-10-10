@@ -74,6 +74,7 @@ timeout 45s plasmashell --no-respawn > "$task_dir/plasma.log" 2>&1
 result=$?
 set -e
 cat "$task_dir/plasma.log"
+python -m timemachine.cli logs --dest test
 [[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
 for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE PASSWORDLESS_BACKUP KEY_DIALOG; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
