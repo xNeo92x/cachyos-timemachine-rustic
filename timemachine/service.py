@@ -57,6 +57,7 @@ class Bridge(QObject):
                     "open_requested": self.open_requested,
                     "version": __version__,
                     "platform": QApplication.platformName(),
+                    "key_dialog_visible": bool(self.window.key_dialog and self.window.key_dialog.isVisible()),
                 }
             )
         except (Error, OSError, ValueError) as exc:
@@ -141,9 +142,9 @@ class Bridge(QObject):
     def Dialog(self, action, name):
         actions = {
             "settings": self.window.settings,
-            "key-set": self.window.set_key,
-            "key-show": self.window.show_key,
-            "keys": self.window.key_menu,
+            "key-set": lambda: self.window.key_menu(name),
+            "key-show": lambda: self.window.key_menu(name),
+            "keys": lambda: self.window.key_menu(name),
             "logs": self.window.logs,
         }
         if action not in actions:

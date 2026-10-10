@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtDBus import QDBusConnection, QDBusMessage
 
-from timemachine.core import Engine, atomic
+from timemachine.core import atomic
 from timemachine.integration import OBJECT, SERVICE
 
 
@@ -34,9 +34,6 @@ def main():
             "destinations": [{"name": "test", "repository": str(base / "repo")}],
         },
     )
-    engine = Engine(base / "config", base / "state")
-    engine.set_key("test", "test-password")
-    engine.initialize("test")
     app = QCoreApplication([])
     bus = QDBusConnection.sessionBus()
     daemon = subprocess.Popen(

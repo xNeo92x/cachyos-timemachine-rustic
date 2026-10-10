@@ -133,6 +133,11 @@ def test_excludes_nested_repository_keys_and_state(rustic_engine):
     engine, source, _ = rustic_engine
     nested_repo = source / "backup-repo"
     engine.config["destinations"][0]["repository"] = str(nested_repo)
+    # Custom credentials and recovery credentials outside keys/ stay private too.
+    custom_password = source / "custom.password"
+    atomic(custom_password, engine.show_key("test") + "\n")
+    atomic(custom_password.with_name(custom_password.name + ".pending"), "recovery-secret\n")
+    engine.config["destinations"][0]["password_file"] = str(custom_password)
     engine.config["source"] = [str(source), str(engine.config_dir), str(engine.state_dir)]
     atomic(engine.config_dir / "excludes.txt", "!subdir/\n")
     engine.initialize("test")
@@ -154,6 +159,77 @@ def test_wrong_password_marks_failed_without_losing_previous_success(rustic_engi
         engine.backup("test")
     assert engine.state("test")["last_success"] == previous
     assert engine.state("test")["last_backup_status"] == "failed"
+
+
+def test_optional_password_and_explicit_missing_file_are_distinct(configured, tmp_path):
+    engine, _, _ = configured
+    engine.password_path(engine.dest("test")).unlink()
+    row = engine.status()[0]
+    assert row["can_backup"] and not row["has_key"] and row["password_mode"] == "none"
+    assert 'password = ""' in engine._profile(engine.dest("test"))
+    engine.dest("test")["password_file"] = str(tmp_path / "missing.password")
+    row = engine.status()[0]
+    assert not row["can_backup"] and row["password_mode"] == "missing"
+    with pytest.raises(Error, match="Passwortdatei fehlt"):
+        engine._profile(engine.dest("test"))
+
+
+@pytest.mark.integration
+def test_first_unattended_backup_without_password_initializes_and_restores(configured, tmp_path):
+    engine, source, repo = configured
+    binary = os.environ.get("RUSTIC_TEST_BINARY")
+    if not binary:
+        pytest.skip("rustic binary required")
+    key = engine.password_path(engine.dest("test"))
+    key.unlink()
+    engine.config["rustic_binary"] = binary
+    atomic(engine.config_path, engine.config)
+    # The timer runs exactly this CLI noninteractively; no init or key set beforehand.
+    result = subprocess.run([sys.executable, "-m", "timemachine.cli", "--config-dir", str(engine.config_dir),
+                             "--state-dir", str(engine.state_dir), "backup", "--dest", "test", "--json"],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["ok"]
+    assert (repo / "config").is_file() and not key.exists()
+    original_config = (repo / "config").read_bytes()
+    snapshot = engine.snapshots("test")[0]
+    engine.check("test")
+    restored = engine.restore("test", snapshot["id"], str(source / "file.txt"), tmp_path / "restore")
+    assert Path(restored["restored"]).read_text() == "first version\n"
+    (source / "file.txt").write_text("second version")
+    engine.backup("test")
+    assert len(engine.snapshots("test")) == 2
+    assert (repo / "config").read_bytes() == original_config
+
+
+@pytest.mark.integration
+def test_optional_password_after_passwordless_backup_replaces_empty_access(configured):
+    engine, _, _ = configured
+    binary = os.environ.get("RUSTIC_TEST_BINARY")
+    if not binary:
+        pytest.skip("rustic binary required")
+    key = engine.password_path(engine.dest("test"))
+    key.unlink()
+    engine.config["rustic_binary"] = binary
+    engine.backup("test")
+    first = engine.snapshots("test")[0]["id"]
+    engine.set_key("test", "new-test-password")
+    assert engine.show_key("test") == "new-test-password"
+    assert engine.snapshots("test")[0]["id"] == first
+    engine.backup("test")
+    key.rename(key.with_suffix(".saved"))
+    with pytest.raises(Error):
+        engine.snapshots("test")  # Empty password no longer opens the repository.
+
+
+@pytest.mark.integration
+def test_passwordless_default_never_reinitializes_existing_protected_repository(rustic_engine):
+    engine, _, repo = rustic_engine
+    original_config = (repo / "config").read_bytes()
+    engine.password_path(engine.dest("test")).unlink()
+    with pytest.raises(Error):
+        engine.backup("test")
+    assert (repo / "config").read_bytes() == original_config
 
 
 def test_cli_cancellation_terminates_hook_process_group(configured, tmp_path):

@@ -247,6 +247,26 @@ class Engine:
             else self.config_dir / "keys" / (dest["name"] + ".password")
         )
 
+    def password_mode(self, dest):
+        if "password_command" in dest:
+            return "external"
+        if self.password_path(dest).is_file():
+            return "stored"
+        return "missing" if "password_file" in dest else "none"
+
+    def repository_identity(self, dest):
+        ident = dest["repository"]
+        if is_smb(ident):
+            ident = smb_url(ident, identity=True)
+        elif ":" not in ident:
+            ident = str(expand(ident).resolve())
+        return hashlib.sha256(ident.encode()).hexdigest()
+
+    def remember_initialized(self, name):
+        dest = self.dest(name)
+        self.update(name, initialized_repository=self.repository_identity(dest),
+                    initialized_without_password=self.password_mode(dest) == "none")
+
     def set_key(self, name, password):
         dest = self.dest(name)
         if "password_command" in dest:
@@ -256,7 +276,26 @@ class Engine:
         path = self.password_path(dest)
         if path.exists():
             raise Error("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht.")
-        atomic(path, password + "\n")
+        with self.operation(name, "key-set"):
+            if path.exists():
+                raise Error("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht.")
+            state = self.state(name)
+            if (state.get("initialized_without_password")
+                    and state.get("initialized_repository") == self.repository_identity(dest)):
+                # Change the password of the EMPTY key, rather than leaving an
+                # unprotected key alongside a new password-protected one.
+                pending = path.with_name(path.name + ".pending")
+                atomic(pending, password + "\n")
+                try:
+                    self.run(name, ["key", "password", "--new-password-file", str(pending)],
+                             capture=False, timeout=None)
+                except (Error, OSError) as exc:
+                    # Retain the credential if transport failed after remote mutation.
+                    raise Error(f"Passwortänderung nicht bestätigt. Neues Passwort zur Wiederherstellung in {pending}. {exc}") from exc
+                os.replace(pending, path)
+                self.remember_initialized(name)
+            else:
+                atomic(path, password + "\n")
 
     def show_key(self, name):
         dest = self.dest(name)
@@ -336,6 +375,8 @@ class Engine:
                         and APP + "-" + dest["name"] + ".timer" in timers.get("units", [])
                     ),
                     "has_key": "password_command" in dest or self.password_path(dest).is_file(),
+                    "can_backup": self.password_mode(dest) != "missing",
+                    "password_mode": self.password_mode(dest),
                     "stale": stale,
                     **state,
                 }
@@ -358,14 +399,9 @@ class Engine:
     def operation(self, name, phase):
         dest = self.dest(name)
         # Serialize writes across destinations pointing at the same repository.
-        ident = dest["repository"]
-        if is_smb(ident):
-            ident = smb_url(ident, identity=True)
-        elif ":" not in ident:
-            ident = str(expand(ident).resolve())
         # Credentials/options may vary for the same URL; serializing too broadly
         # is preferable to letting two local writers modify the same repository.
-        lock = self.state_dir / ("repo-" + hashlib.sha256(ident.encode()).hexdigest() + ".lock")
+        lock = self.state_dir / ("repo-" + self.repository_identity(dest) + ".lock")
         self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         with contextlib.ExitStack() as stack:
             for path in (self.folder(name) / "operation.lock", lock):
@@ -449,10 +485,14 @@ class Engine:
         lines = ["[repository]", "repository = " + json.dumps(repo, ensure_ascii=False)]
         if "password_command" in dest:
             lines.append("password-command = " + json.dumps(dest["password_command"], ensure_ascii=False))
+        elif self.password_mode(dest) == "none":
+            # An explicit empty credential is supported by rustic. Omitting it
+            # would make a noninteractive timer try to prompt on /dev/null.
+            lines.append('password = ""')
         else:
             key = self.password_path(dest)
             if not key.is_file():
-                raise Error("Zuerst einen Backup-Schlüssel speichern.")
+                raise Error("Die ausdrücklich konfigurierte Passwortdatei fehlt. Bitte wiederherstellen oder den Pfad korrigieren.")
             if key.stat().st_mode & 0o077:
                 raise Error(f"Schlüsseldatei ist zu offen. Bitte chmod 600 {key}")
             lines.append("password-file = " + json.dumps(str(key), ensure_ascii=False))
@@ -661,6 +701,7 @@ class Engine:
     def initialize(self, name):
         with self.operation(name, "init"):
             self.run(name, ["init"], capture=False, timeout=None)
+            self.remember_initialized(name)
 
     def check(self, name):
         with self.operation(name, "check"):
@@ -680,6 +721,8 @@ class Engine:
                     if not Path(source).exists():
                         raise Error(f"Backup-Quelle fehlt: {source}")
                 args = ["backup", "--json", "--label", APP]
+                if not dry_run:
+                    args.append("--init")  # rustic leaves existing repositories intact.
                 exclude = self.config_dir / self.config.get("exclude_file", "excludes.txt")
                 if exclude.exists():
                     patterns = exclude.read_text()
@@ -699,7 +742,8 @@ class Engine:
                     if ":" not in destination["repository"]:
                         exclusions.append(expand(destination["repository"]).resolve())
                     if "password_command" not in destination:
-                        exclusions.append(self.password_path(destination))
+                        password = self.password_path(destination)
+                        exclusions.extend([password, password.with_name(password.name + ".pending")])
                     if destination.get("env_file"):
                         exclusions.append(expand(destination["env_file"]))
                 for path in exclusions:
@@ -731,6 +775,7 @@ class Engine:
                     )
                 stamp = now()
                 self.update(name, last_success=stamp, last_backup_status="success", backup_error=None)
+                self.remember_initialized(name)
                 retention = dest.get("retention", self.config.get("retention", RETENTION))
                 self.update(name, phase="retention")
                 retention_args = ["forget", "--prune", "--filter-label", APP]

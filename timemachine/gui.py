@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -100,7 +99,7 @@ def status_text(row):
         return "Fehler / Vorgang unterbrochen"
     if row.get("maintenance_error"):
         return "Sicherung erfolgreich · Bereinigung fehlgeschlagen"
-    if not row.get("has_key"):
+    if not row.get("can_backup", row.get("has_key")):
         return "Einrichtung erforderlich"
     if row.get("stale"):
         return "Letzte Sicherung ist überfällig"
@@ -498,6 +497,113 @@ class Settings(QDialog):
         self.accept()
 
 
+class KeyDialog(QDialog):
+    """Visible, retained password management; no cursor-anchored service menu."""
+
+    def __init__(self, window, name):
+        super().__init__(window)
+        self.window, self.name = window, name
+        self.setWindowTitle("Backup-Passwort · " + window.engine.dest(name).get("display_name", name))
+        self.setMinimumWidth(480)
+        self.busy = False
+        layout = QVBoxLayout(self)
+        self.explanation = QLabel()
+        self.explanation.setWordWrap(True)
+        layout.addWidget(self.explanation)
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setPlaceholderText("Eigenes Passwort (optional)")
+        self.repeat = QLineEdit()
+        self.repeat.setEchoMode(QLineEdit.EchoMode.Password)
+        self.repeat.setPlaceholderText("Passwort wiederholen")
+        layout.addWidget(self.password)
+        layout.addWidget(self.repeat)
+        self.message = QLabel()
+        self.message.setWordWrap(True)
+        layout.addWidget(self.message)
+        self.save_button = button("Passwort speichern", self.save_password)
+        layout.addWidget(self.save_button)
+        self.reveal_button = button("Anzeigen / verbergen", self.reveal)
+        layout.addWidget(self.reveal_button)
+        self.export_button = button("In 1Password sichern", self.export_password)
+        layout.addWidget(self.export_button)
+        self.close_button = button("Schließen", self.reject)
+        layout.addWidget(self.close_button)
+        self.refresh_mode()
+
+    def refresh_mode(self):
+        mode = self.window.engine.password_mode(self.window.engine.dest(self.name))
+        stored = mode == "stored"
+        external = mode == "external"
+        self.explanation.setText(
+            "Ein Passwort ist gespeichert. Bewahre es auch außerhalb dieses PCs auf."
+            if stored else "Das Passwort wird über password_command verwaltet."
+            if external else
+            "Ein eigenes Passwort ist optional. Ohne Passwort können Personen mit Zugriff auf das Repository die Sicherungen lesen.\n"
+            "Für eine Sicherung ohne Passwort dieses Fenster einfach schließen."
+        )
+        self.password.setVisible(not external)
+        self.password.setReadOnly(stored)
+        self.repeat.setVisible(not stored and not external)
+        self.save_button.setVisible(not stored and not external)
+        self.reveal_button.setVisible(stored)
+        self.export_button.setVisible(stored)
+        if stored:
+            self.password.setText(self.window.engine.show_key(self.name))
+            self.repeat.clear()
+
+    def reveal(self):
+        self.password.setEchoMode(
+            QLineEdit.EchoMode.Normal if self.password.echoMode() == QLineEdit.EchoMode.Password
+            else QLineEdit.EchoMode.Password
+        )
+
+    def save_password(self):
+        password = self.password.text()
+        if not password:
+            self.message.setText("Für eine Sicherung ohne eigenes Passwort dieses Fenster schließen.")
+            return
+        if password != self.repeat.text():
+            self.message.setText("Passwörter stimmen nicht überein.")
+            return
+        self.submit(["key", "set", "--dest", self.name, "--stdin"], password)
+
+    def export_password(self):
+        self.submit(["key", "save-1password", "--dest", self.name])
+
+    def submit(self, args, secret=None):
+        if self.busy:
+            return
+        self.busy = True
+        self.setEnabled(False)
+
+        def ready(result):
+            self.busy = False
+            self.setEnabled(True)
+            if result.get("ok"):
+                self.window.reload()
+                self.refresh_mode()
+                self.message.setText("Passwort gespeichert." if secret is not None else "In 1Password gesichert.")
+            else:
+                self.message.setText(result.get("error", "Passwort konnte nicht gespeichert werden."))
+
+        self.window.jobs.start(args, ready, secret)
+
+    def reject(self):
+        if not self.busy:
+            self.password.clear()
+            self.repeat.clear()
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.busy:
+            event.ignore()
+        else:
+            self.password.clear()
+            self.repeat.clear()
+            super().closeEvent(event)
+
+
 class RestoreBrowser(QDialog):
     def __init__(self, window, name):
         super().__init__(window)
@@ -704,6 +810,7 @@ class Window(QMainWindow):
         self.last_menu = None
         self.dialogs = []
         self.settings_dialog = None
+        self.key_dialog = None
         self.setWindowTitle("CachyOS Time Machine")
         self.setWindowIcon(tray_icon("#3daee9"))
         self.resize(900, 610)
@@ -849,7 +956,7 @@ class Window(QMainWindow):
             or r.get("maintenance_error")
             for r in rows
         )
-        configured = all(r.get("has_key") for r in rows)
+        configured = all(r.get("can_backup", r.get("has_key")) for r in rows)
         self.tray.setIcon(
             tray_icon(
                 "#3daee9"
@@ -867,7 +974,7 @@ class Window(QMainWindow):
                 r["display_name"] + ": " + status_text(r) + " · " + date(r.get("last_success")) for r in rows
             )
         )
-        signature = tuple((r["name"], r["display_name"], r.get("status"), r.get("has_key")) for r in rows)
+        signature = tuple((r["name"], r["display_name"], r.get("status"), r.get("can_backup", r.get("has_key"))) for r in rows)
         if signature != self.last_menu:
             self.last_menu = signature
             previous_menu = self.tray.contextMenu()
@@ -946,7 +1053,7 @@ class Window(QMainWindow):
             self.dry_button,
             self.init_button,
         ):
-            btn.setEnabled(not running and row.get("has_key", False))
+            btn.setEnabled(not running and row.get("can_backup", row.get("has_key", False)))
         self.cancel_button.setEnabled(running)
 
     def action(self, command, extra=None, name=None):
@@ -999,65 +1106,36 @@ class Window(QMainWindow):
         layout.addWidget(button("Schließen", dialog.close))
         dialog.exec()
 
-    def key_menu(self):
-        menu = QMenu(self)
-        menu.addAction("Schlüssel speichern …", self.set_key)
-        menu.addAction("Schlüssel anzeigen / extern sichern …", self.show_key)
-        menu.addAction(
-            "In 1Password sichern",
-            lambda: self.jobs.start(["key", "save-1password", "--dest", self.selected()]),
-        )
-        menu.exec(self.cursor().pos())
+    def key_menu(self, name=None):
+        if isinstance(name, bool) or name is None:
+            name = self.selected()
+        if not name:
+            return
+        if self.key_dialog is not None:
+            self.key_dialog.raise_()
+            self.key_dialog.activateWindow()
+            return
+        if self.jobs.processes or any(r.get("status") == "running" for r in self.rows):
+            self.error("Bitte laufende Vorgänge zuerst abschließen oder abbrechen.")
+            return
+        dialog = KeyDialog(self, name)
+        self.key_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+        def finished(_):
+            self.key_dialog = None
+            dialog.deleteLater()
+
+        dialog.finished.connect(finished)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def set_key(self):
-        name = self.selected()
-        password, ok = QInputDialog.getText(
-            self, "Backup-Schlüssel", "Neues Passwort (auch extern aufbewahren):", QLineEdit.EchoMode.Password
-        )
-        if not ok:
-            return
-        repeat, ok = QInputDialog.getText(
-            self, "Backup-Schlüssel", "Passwort wiederholen:", QLineEdit.EchoMode.Password
-        )
-        if not ok:
-            return
-        if password != repeat:
-            self.error("Passwörter stimmen nicht überein.")
-            return
-
-        def ready(result):
-            if result.get("ok"):
-                QMessageBox.information(
-                    self,
-                    "Schlüssel gespeichert",
-                    "Bitte bewahre das Passwort zusätzlich außerhalb dieses PCs auf.\nAls Nächstes: Repository initialisieren, dann Jetzt sichern.",
-                )
-            else:
-                self.error(result.get("error", "Schlüssel konnte nicht gespeichert werden."))
-
-        self.jobs.start(["key", "set", "--dest", name, "--stdin"], ready, password)
+        self.key_menu()
 
     def show_key(self):
-        try:
-            password = self.engine.show_key(self.selected())
-        except Error as exc:
-            self.error(str(exc))
-            return
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Backup-Schlüssel extern sichern")
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(
-            QLabel(
-                "In einem Passwortmanager oder auf Papier außerhalb dieses PCs sichern.\nOhne dieses Passwort sind die Backups nicht lesbar."
-            )
-        )
-        value = QLineEdit(password)
-        value.setReadOnly(True)
-        value.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addWidget(value)
-        layout.addWidget(button("Anzeigen", lambda: value.setEchoMode(QLineEdit.EchoMode.Normal)))
-        layout.addWidget(button("Schließen", dialog.accept))
-        dialog.exec()
+        self.key_menu()
 
     def show_window(self):
         self.show()

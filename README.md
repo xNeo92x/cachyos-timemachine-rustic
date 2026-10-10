@@ -102,13 +102,30 @@ nicht verbunden.
    Im Dateidialog kann auch ein eigener Backup-Ordner angelegt werden. Der
    Starterpfad `CHANGE-ME` muss ersetzt werden; Remote-Backends behalten ihr
    Repository-Feld und die Backend-Optionen.
-2. **Schlüssel → Schlüssel speichern**. Passwort zusätzlich außerhalb des PCs
-   sichern, beispielsweise in einem Passwortmanager.
-3. Im Popup **Initialisieren**, dann **Jetzt sichern**.
+2. Optional: Im Popup **Passwort …** öffnen und ein eigenes Passwort speichern.
+   Zusätzlich außerhalb des PCs sichern, beispielsweise in einem Passwortmanager.
+   Ohne eigenes Passwort diesen Schritt überspringen.
+3. **Jetzt sichern**. Ein neues Repository wird beim ersten Backup automatisch
+   initialisiert; das gilt auch für einen automatisch gestarteten Zeitplan.
+   **Initialisieren** ist nur noch eine zusätzliche manuelle Möglichkeit.
 4. **Zeitpläne aktivieren**. Speichern der Einstellungen schreibt und aktiviert
    ebenfalls die Zeitpläne neu. Fehler dabei werden angezeigt.
 
-Der Schlüssel liegt standardmäßig unter
+Ohne gespeichertes Passwort verwendet die Anwendung das von rustic unterstützte
+leere Passwort. Es gibt keine Passwortabfrage und keine erforderliche Schlüsseldatei.
+Das rustic-Repositoryformat bleibt verschlüsselt, bietet mit einem leeren Passwort
+aber keinen Passwortschutz: Personen mit Zugriff auf das Repository können die
+Sicherungen lesen. Ein bestehendes Repository mit eigenem Passwort benötigt weiterhin
+sein ursprüngliches Passwort; es wird weder neu angelegt noch auf ein leeres Passwort
+umgestellt. Eine ausdrücklich konfigurierte, fehlende `password_file` bleibt ein Fehler.
+
+Für ein von der Anwendung bereits ohne Passwort verwendetes Repository setzt
+**Passwort …** nachträglich ein eigenes Passwort und ersetzt dabei den leeren
+Zugang. Die bestehenden Snapshots bleiben erhalten. Bereits gespeicherte eigene
+Passwörter werden nicht überschrieben. Ein Fehler während einer Passwortänderung
+lässt die neue lokale Datei mit Endung `.pending` zur Wiederherstellung bestehen.
+
+Ein optional gespeicherter Schlüssel liegt standardmäßig unter
 `~/.config/cachyos-time-machine/keys/NAME.password` mit Dateirechten **0600**.
 Er gelangt weder in die Prozessargumente noch in die Protokolle und wird vom
 Backup ausgeschlossen. Die lokale Passwortdatei ist nicht zusätzlich durch

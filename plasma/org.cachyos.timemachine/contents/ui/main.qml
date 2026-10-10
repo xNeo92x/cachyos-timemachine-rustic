@@ -219,7 +219,7 @@ PlasmoidItem {
             color: root.running ? Kirigami.Theme.highlightColor : root.bad || root.serviceError ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.neutralTextColor
             height: width
             radius: width / 2
-            visible: root.running || root.bad || root.serviceError.length > 0 || root.rows.some(r => !r.has_key)
+            visible: root.running || root.bad || root.serviceError.length > 0 || root.rows.some(r => !r.can_backup)
             width: Kirigami.Units.smallSpacing * 2
         }
         MouseArea {
@@ -435,15 +435,16 @@ PlasmoidItem {
             }
             PC.Button {
                 Layout.fillWidth: true
-                enabled: root.selected && root.selected.has_key && root.selected.status !== "running"
+                enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-save"
+                objectName: "backupNowButton"
                 text: "Jetzt sichern"
 
                 onClicked: root.action("backup")
             }
             PC.Button {
                 Layout.fillWidth: true
-                enabled: root.selected && root.selected.has_key && root.selected.status !== "running"
+                enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-revert"
                 text: "Dateien wiederherstellen …"
 
@@ -451,13 +452,13 @@ PlasmoidItem {
             }
             RowLayout {
                 PC.Button {
-                    enabled: root.selected && root.selected.has_key && root.selected.status !== "running"
+                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                     text: "Prüfen"
 
                     onClicked: root.action("check")
                 }
                 PC.Button {
-                    enabled: root.selected && root.selected.has_key && root.selected.status !== "running"
+                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                     text: "Testlauf"
 
                     onClicked: root.action("backup", {
@@ -473,13 +474,14 @@ PlasmoidItem {
             }
             RowLayout {
                 PC.Button {
-                    enabled: !!root.selected
-                    text: "Schlüssel …"
+                    enabled: root.selected && root.selected.status !== "running"
+                    objectName: "backupKeyButton"
+                    text: "Passwort …"
 
                     onClicked: root.dialog("keys")
                 }
                 PC.Button {
-                    enabled: root.selected && root.selected.has_key && root.selected.status !== "running"
+                    enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                     text: "Initialisieren"
 
                     onClicked: root.action("init")

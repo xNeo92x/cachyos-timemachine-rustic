@@ -183,6 +183,12 @@ force user = {getpass.getuser()}
                 window.settings()
                 assert str(file) in window.settings_dialog.sources.toPlainText().splitlines()
                 window.settings_dialog.reject()
+                window.key_menu("nas")
+                wait(lambda: window.key_dialog is not None and window.key_dialog.isVisible())
+                assert "optional" in window.key_dialog.explanation.text()
+                QTest.mouseClick(window.key_dialog.close_button, Qt.MouseButton.LeftButton)
+                wait(lambda: window.key_dialog is None)
+                print("KDE_NATIVE_OPTIONAL_PASSWORD_DIALOG_OK platform=" + QApplication.platformName(), flush=True)
                 print("KDE_NATIVE_LOCAL_AND_SMB_PICKER_OPEN_SAVE_REOPEN_OK platform=" + QApplication.platformName(), flush=True)
             finally:
                 if window is not None:

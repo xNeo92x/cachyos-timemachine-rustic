@@ -53,8 +53,7 @@ def main():
         }
         atomic(base / "config/config.json", config)
         engine = Engine(base / "config", base / "state")
-        engine.set_key("nas", "test-only-password")
-        engine.initialize("nas")
+        engine.backup("nas")
         assert (base / "share/Repository space/config").is_file(), "Repository not written to SMB server"
         assert any(root == mount for _, root in kio_mounts())
         # A Qt native picker may return the mounted local path; persist its URL.
@@ -63,6 +62,12 @@ def main():
         engine.backup("nas")
         snapshot = engine.snapshots("nas")[0]["id"]
         engine.check("nas")
+        restored = engine.restore("nas", snapshot, str(source / "üñïcode [file].txt"), str(base / "restored-empty"))
+        assert Path(restored["restored"]).read_text() == "real SMB backup and restore"
+        assert not engine.password_path(engine.dest("nas")).exists()
+        engine.set_key("nas", "test-only-password")
+        assert engine.snapshots("nas")[0]["id"] == snapshot
+        print("NAS_PASSWORDLESS_FIRST_BACKUP_AND_OPTIONAL_PASSWORD_OK", flush=True)
         # Simulate another login with a different FUSE mountpoint.
         child.terminate()
         child.wait(timeout=10)

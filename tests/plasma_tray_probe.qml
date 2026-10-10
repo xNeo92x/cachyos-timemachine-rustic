@@ -24,6 +24,16 @@ Timer {
         check(root.fullRepresentationItem && root.fullRepresentationItem.visible,
               "full representation is visible in tray popup");
     }
+    function findButton(item, name) {
+        if (item.objectName === name)
+            return item;
+        for (const child of item.children) {
+            const found = findButton(child, name);
+            if (found)
+                return found;
+        }
+        return null;
+    }
     onTriggered: {
         if (step === 0) {
             for (let item = root.parent; item; item = item.parent) {
@@ -56,7 +66,27 @@ Timer {
         } else if (step === 4) {
             checkPopup();
             console.info("TIMEMACHINE_ACTIVATE_READY");
-            stop();
+        } else if (step === 5) {
+            const backup = findButton(root.fullRepresentationItem, "backupNowButton");
+            check(root.selected && !root.selected.has_key, "test destination has no password");
+            check(backup && backup.enabled, "backup enabled without optional password");
+            check(trayInput.mouseClick(backup, backup.width / 2, backup.height / 2,
+                                      Qt.LeftButton, Qt.NoModifier, 10), "backup click delivered");
+        } else if (step === 6) {
+            check(!root.selected.backup_error, "popup backup did not fail: " + root.selected.backup_error);
+            if (!root.selected.last_success || root.selected.status === "running")
+                return;
+            console.info("TIMEMACHINE_PASSWORDLESS_BACKUP_READY");
+            const key = findButton(root.fullRepresentationItem, "backupKeyButton");
+            check(key && key.enabled, "password button enabled");
+            check(trayInput.mouseClick(key, key.width / 2, key.height / 2,
+                                      Qt.LeftButton, Qt.NoModifier, 10), "password click delivered");
+        } else if (step === 7) {
+            root.call("Status", [], result => {
+                check(result.key_dialog_visible, "password window visible after popup handoff");
+                console.info("TIMEMACHINE_KEY_DIALOG_READY");
+                stop();
+            });
         }
         step++;
     }

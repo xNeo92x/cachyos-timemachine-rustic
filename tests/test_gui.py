@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QPushButton
 from timemachine.core import atomic
 from timemachine.gui import RestoreBrowser, Settings, Window
 from timemachine.schedule import ScheduleEditor
+from timemachine.service import Bridge
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +28,60 @@ def wait_jobs(app, window, timeout=15):
         app.processEvents()
         time.sleep(0.01)
     assert not window.jobs.processes, "GUI worker failed to finish"
+
+
+def test_optional_password_enables_backup_and_dbus_opens_visible_dialog(app, configured):
+    engine, _, _ = configured
+    engine.password_path(engine.dest("test")).unlink()
+    window = Window(engine.config_dir, engine.state_dir, native_panel=True)
+    bridge = Bridge(window)
+    assert window.backup_button.isEnabled() and window.init_button.isEnabled()
+    result = json.loads(bridge.Dialog("keys", "test"))
+    assert result["ok"]
+    app.processEvents()
+    dialog = window.key_dialog
+    assert dialog is not None and dialog.isVisible()
+    assert "optional" in dialog.explanation.text()
+    window.key_menu()
+    assert window.key_dialog is dialog
+    dialog.password.setText("chosen-password")
+    dialog.repeat.setText("mismatch")
+    dialog.save_button.click()
+    assert "nicht überein" in dialog.message.text()
+    assert not engine.password_path(engine.dest("test")).exists()
+    dialog.repeat.setText("chosen-password")
+    dialog.save_button.click()
+    wait_jobs(app, window)
+    assert dialog.isVisible()
+    assert engine.show_key("test") == "chosen-password"
+    assert dialog.password.isReadOnly() and dialog.reveal_button.isVisible()
+    dialog.reject()
+    assert window.key_dialog is None
+    assert window.backup_button.isEnabled()
+    window.timer.stop()
+    window.deleteLater()
+
+
+def test_password_dialog_targets_opened_destination_despite_selection_change(app, configured):
+    engine, _, repo = configured
+    engine.password_path(engine.dest("test")).unlink()
+    engine.config["destinations"].append({"name": "second", "repository": str(repo.parent / "second")})
+    atomic(engine.config_path, engine.config)
+    window = Window(engine.config_dir, engine.state_dir, native_panel=True)
+    bridge = Bridge(window)
+    assert json.loads(bridge.Dialog("keys", "test"))["ok"]
+    window.list.setCurrentRow(1)
+    app.processEvents()
+    dialog = window.key_dialog
+    dialog.password.setText("captured-destination")
+    dialog.repeat.setText("captured-destination")
+    dialog.save_button.click()
+    wait_jobs(app, window)
+    assert engine.show_key("test") == "captured-destination"
+    assert not window.engine.password_path(window.engine.dest("second")).exists()
+    dialog.reject()
+    window.timer.stop()
+    window.deleteLater()
 
 
 def test_settings_preserve_advanced_fields_and_add_dest(app, configured):

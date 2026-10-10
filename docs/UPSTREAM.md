@@ -19,7 +19,7 @@ Entwickelt und getestet mit rustic **0.11.4**.
 | Panel und mehrere Ziele | An der KDE-Leiste verankertes Plasma-Popup mit Zielauswahl |
 | Quellen als Pfad oder Liste | JSON `source`; fehlende Quellen brechen den gesamten Backup-Vorgang ab |
 | Geplante und manuelle Backups | systemd-Benutzertimer und dieselbe CLI für GUI/manuellen Aufruf |
-| Verschlüsselter Speicher | rustic-Repository mit Passwortdatei oder externem password_command |
+| Verschlüsselter Speicher | rustic-Repository mit optionaler Passwortdatei oder externem password_command; ohne Datei explizit leeres Passwort |
 | Schlüssel anzeigen / 1Password | CLI und GUI; Secret-Eingabe und 1Password-Export über stdin |
 | Ausschlüsse | Native rustic-Globs, deren Vorzeichen sich von üblichen gitignore-Dateien unterscheiden |
 | Aufbewahrung | 7 tägliche, 4 wöchentliche, 12 monatliche, 3 jährliche Stände; `forget --prune` |
