@@ -8,6 +8,9 @@ export XDG_STATE_HOME="$task_dir/state"
 export XDG_CACHE_HOME="$task_dir/cache"
 export QT_QPA_PLATFORM=xcb
 export QT_QUICK_BACKEND=software
+# The disposable Arch container has no configured /etc/localtime. Give rustic
+# a known zone, as a configured desktop session would have.
+export TZ=UTC
 cleanup() {
   python - <<'PY'
 from PySide6.QtCore import QCoreApplication
