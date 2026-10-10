@@ -68,6 +68,9 @@ Timer {
             console.info("TIMEMACHINE_ACTIVATE_READY");
         } else if (step === 5) {
             const backup = findButton(root.fullRepresentationItem, "backupNowButton");
+            check(root.language === "en" && backup.text === "Back up now", "English popup follows saved language");
+            check(root.tr("Einstellungen") === "Settings", "English settings label");
+            console.info("TIMEMACHINE_ENGLISH_UI_READY");
             check(root.selected && !root.selected.has_key, "test destination has no password");
             check(backup && backup.enabled, "backup enabled without optional password");
             check(trayInput.mouseClick(backup, backup.width / 2, backup.height / 2,

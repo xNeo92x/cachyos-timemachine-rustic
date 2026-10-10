@@ -19,6 +19,7 @@ import time
 import uuid
 from pathlib import Path, PurePosixPath
 
+from .i18n import CHOICES, configure, tr
 from .network import NetworkError, is_smb, kio_mounts, repository_access, smb_url
 
 APP = "cachyos-time-machine"
@@ -60,33 +61,35 @@ def read_json(path, default=None):
     except FileNotFoundError:
         return default
     except (ValueError, OSError) as exc:
-        raise Error(f"Ungültige Datei {path}: {exc}") from exc
+        raise Error(tr("Ungültige Datei {p0}: {p1}", p0=path, p1=exc)) from exc
 
 
 def validate(config):
     if not isinstance(config, dict):
-        raise Error("Konfiguration muss ein JSON-Objekt sein.")
+        raise Error(tr("Konfiguration muss ein JSON-Objekt sein."))
+    if config.get("language", "system") not in CHOICES:
+        raise Error(tr("language muss system, de oder en sein."))
     sources = config.get("source", "~")
     sources = [sources] if isinstance(sources, str) else sources
     if not isinstance(sources, list) or not sources or any(not isinstance(x, str) or not x for x in sources):
-        raise Error("source muss ein Pfad oder eine nicht leere Pfadliste sein.")
+        raise Error(tr("source muss ein Pfad oder eine nicht leere Pfadliste sein."))
     destinations = config.get("destinations")
     if not isinstance(destinations, list) or not destinations:
-        raise Error("Mindestens ein Backup-Ziel ist erforderlich.")
+        raise Error(tr("Mindestens ein Backup-Ziel ist erforderlich."))
     names = set()
     for dest in destinations:
         if not isinstance(dest, dict):
-            raise Error("Jedes Ziel muss ein Objekt sein.")
+            raise Error(tr("Jedes Ziel muss ein Objekt sein."))
         name = dest.get("name", "")
         if (
             not isinstance(name, str)
             or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name)
             or name in names
         ):
-            raise Error("Zielnamen müssen eindeutig sein und nur Buchstaben, Ziffern, _ oder - enthalten.")
+            raise Error(tr("Zielnamen müssen eindeutig sein und nur Buchstaben, Ziffern, _ oder - enthalten."))
         names.add(name)
         if not isinstance(dest.get("repository"), str) or not dest["repository"]:
-            raise Error(f"Repository fehlt für {name}.")
+            raise Error(tr("Repository fehlt für {p0}.", p0=name))
         if is_smb(dest["repository"]):
             try:
                 dest["repository"] = smb_url(dest["repository"])
@@ -94,7 +97,7 @@ def validate(config):
                 raise Error(str(exc)) from exc
         if dest["repository"].startswith(("sftp:", "s3:", "b2:", "azure:", "gs:")):
             raise Error(
-                "restic-URLs werden nicht übernommen. Nutze opendal:sftp / opendal:s3 mit options oder rclone:remote:path."
+                tr("restic-URLs werden nicht übernommen. Nutze opendal:sftp / opendal:s3 mit options oder rclone:remote:path.")
             )
         for key in (
             "schedule",
@@ -105,38 +108,38 @@ def validate(config):
             "password_file",
         ):
             if key in dest and (not isinstance(dest[key], str) or any(c in dest[key] for c in "\n\r\0")):
-                raise Error(f"Ungültiger Wert für {name}.{key}.")
+                raise Error(tr("Ungültiger Wert für {p0}.{p1}.", p0=name, p1=key))
         for key in ("options", "env"):
             if key in dest and (
                 not isinstance(dest[key], dict)
                 or any(not isinstance(k, str) or not isinstance(v, str) for k, v in dest[key].items())
             ):
-                raise Error(f"{key} muss ein Objekt mit Zeichenketten sein.")
+                raise Error(tr("{p0} muss ein Objekt mit Zeichenketten sein.", p0=key))
         if "exclude_file" in config and not isinstance(config["exclude_file"], str):
-            raise Error("exclude_file muss eine Zeichenkette sein.")
+            raise Error(tr("exclude_file muss eine Zeichenkette sein."))
         if "password_command" in dest and (
             not isinstance(dest["password_command"], str) or not dest["password_command"]
         ):
-            raise Error("password_command muss ein nicht leerer Befehl sein.")
+            raise Error(tr("password_command muss ein nicht leerer Befehl sein."))
         if "password_command" in dest and "password_file" in dest:
-            raise Error("Nutze password_file oder password_command, nicht beide.")
+            raise Error(tr("Nutze password_file oder password_command, nicht beide."))
         retention = dest.get("retention", config.get("retention", RETENTION))
         if (
             not isinstance(retention, dict)
             or any(k not in RETENTION or type(v) is not int or v < 0 for k, v in retention.items())
             or not any(retention.values())
         ):
-            raise Error("Aufbewahrung benötigt mindestens eine positive Anzahl daily/weekly/monthly/yearly.")
+            raise Error(tr("Aufbewahrung benötigt mindestens eine positive Anzahl daily/weekly/monthly/yearly."))
         for key in ("stale_hours", "hook_timeout"):
             v = dest.get(key, config.get(key, 48 if key == "stale_hours" else 120))
             if not isinstance(v, (int, float)) or isinstance(v, bool) or not 0 < v <= 87600:
-                raise Error(f"Ungültiger Wert für {key}.")
+                raise Error(tr("Ungültiger Wert für {p0}.", p0=key))
     return config
 
 
 def safe_snapshot(value):
     if not re.fullmatch(r"[0-9a-f]{8,64}", value):
-        raise Error("Ungültige Snapshot-ID.")
+        raise Error(tr("Ungültige Snapshot-ID."))
     return value
 
 
@@ -147,7 +150,7 @@ def safe_path(value):
         or "\0" in value
         or ".." in PurePosixPath(value).parts
     ):
-        raise Error("Snapshot-Pfad muss absolut sein und darf kein .. enthalten.")
+        raise Error(tr("Snapshot-Pfad muss absolut sein und darf kein .. enthalten."))
     return str(PurePosixPath(value))
 
 
@@ -193,7 +196,9 @@ class Engine:
             state_dir or Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / APP
         )
         self.config_path = self.config_dir / "config.json"
-        self.config = validate(read_json(self.config_path, {}))
+        config = read_json(self.config_path, {})
+        configure(config.get("language", "system") if isinstance(config, dict) else "system")
+        self.config = validate(config)
         self.cancelled = False
         self.child = None
         self.current = None
@@ -213,7 +218,7 @@ class Engine:
                     "destinations": [
                         {
                             "name": "backup-drive",
-                            "display_name": "Backup-Laufwerk",
+                            "display_name": tr("Backup-Laufwerk"),
                             "repository": "/run/media/CHANGE-ME/backup/rustic",
                             "schedule": "*-*-* 03:00:00",
                         }
@@ -232,7 +237,7 @@ class Engine:
         for dest in self.config["destinations"]:
             if dest["name"] == name:
                 return dest
-        raise Error(f"Unbekanntes Backup-Ziel: {name}")
+        raise Error(tr("Unbekanntes Backup-Ziel: {p0}", p0=name))
 
     def folder(self, name):
         self.dest(name)
@@ -270,15 +275,15 @@ class Engine:
     def set_key(self, name, password):
         dest = self.dest(name)
         if "password_command" in dest:
-            raise Error("Dieses Ziel nutzt password_command. Verwalte den Schlüssel dort.")
+            raise Error(tr("Dieses Ziel nutzt password_command. Verwalte den Schlüssel dort."))
         if not password or any(c in password for c in "\n\r\0"):
-            raise Error("Passwort darf nicht leer sein und keine Zeilenumbrüche enthalten.")
+            raise Error(tr("Passwort darf nicht leer sein und keine Zeilenumbrüche enthalten."))
         path = self.password_path(dest)
         if path.exists():
-            raise Error("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht.")
+            raise Error(tr("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht."))
         with self.operation(name, "key-set"):
             if path.exists():
-                raise Error("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht.")
+                raise Error(tr("Schlüssel existiert bereits. Ein Austausch ändert das Repository-Passwort nicht."))
             state = self.state(name)
             if (state.get("initialized_without_password")
                     and state.get("initialized_repository") == self.repository_identity(dest)):
@@ -291,7 +296,7 @@ class Engine:
                              capture=False, timeout=None)
                 except (Error, OSError) as exc:
                     # Retain the credential if transport failed after remote mutation.
-                    raise Error(f"Passwortänderung nicht bestätigt. Neues Passwort zur Wiederherstellung in {pending}. {exc}") from exc
+                    raise Error(tr("Passwortänderung nicht bestätigt. Neues Passwort zur Wiederherstellung in {p0}. {p1}", p0=pending, p1=exc)) from exc
                 os.replace(pending, path)
                 self.remember_initialized(name)
             else:
@@ -300,11 +305,11 @@ class Engine:
     def show_key(self, name):
         dest = self.dest(name)
         if "password_command" in dest:
-            raise Error("Schlüssel wird extern über password_command verwaltet.")
+            raise Error(tr("Schlüssel wird extern über password_command verwaltet."))
         try:
             return self.password_path(dest).read_text().rstrip("\n")
         except OSError as exc:
-            raise Error("Noch kein Schlüssel gespeichert.") from exc
+            raise Error(tr("Noch kein Schlüssel gespeichert.")) from exc
 
     def save_1password(self, name, vault=None):
         title = f"Time Machine backup key ({name})"
@@ -318,7 +323,7 @@ class Engine:
             timeout=60,
         )
         if any(x.get("title") == title for x in json.loads(listed.stdout)):
-            raise Error("In 1Password existiert bereits ein Eintrag mit diesem Titel.")
+            raise Error(tr("In 1Password existiert bereits ein Eintrag mit diesem Titel."))
         template = subprocess.run(
             ["op", "item", "template", "get", "Password"],
             capture_output=True,
@@ -349,7 +354,7 @@ class Engine:
                 **state,
                 "status": "interrupted",
                 "phase": "interrupted",
-                "error": "Vorgang wurde unterbrochen (z. B. Neustart).",
+                "error": tr("Vorgang wurde unterbrochen (z. B. Neustart)."),
             }
         return state
 
@@ -392,7 +397,7 @@ class Engine:
     def cancel(self, name):
         state = self.state(name)
         if state.get("status") != "running" or not alive(state):
-            raise Error("Kein laufender Vorgang für dieses Ziel.")
+            raise Error(tr("Kein laufender Vorgang für dieses Ziel."))
         os.kill(state["pid"], signal.SIGTERM)
 
     @contextlib.contextmanager
@@ -410,7 +415,7 @@ class Engine:
                 try:
                     fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError as exc:
-                    raise Error("Für dieses Ziel/Repository läuft bereits ein Vorgang.") from exc
+                    raise Error(tr("Für dieses Ziel/Repository läuft bereits ein Vorgang.")) from exc
             self.current = name
             self.cancelled = False
             self.update(
@@ -473,7 +478,7 @@ class Engine:
             if not isinstance(values, dict) or any(
                 not isinstance(k, str) or not isinstance(v, str) for k, v in values.items()
             ):
-                raise Error("env_file muss ein JSON-Objekt mit Zeichenketten enthalten.")
+                raise Error(tr("env_file muss ein JSON-Objekt mit Zeichenketten enthalten."))
             env.update(values)
         env.update(dest.get("env", {}))
         return env
@@ -492,9 +497,9 @@ class Engine:
         else:
             key = self.password_path(dest)
             if not key.is_file():
-                raise Error("Die ausdrücklich konfigurierte Passwortdatei fehlt. Bitte wiederherstellen oder den Pfad korrigieren.")
+                raise Error(tr("Die ausdrücklich konfigurierte Passwortdatei fehlt. Bitte wiederherstellen oder den Pfad korrigieren."))
             if key.stat().st_mode & 0o077:
-                raise Error(f"Schlüsseldatei ist zu offen. Bitte chmod 600 {key}")
+                raise Error(tr("Schlüsseldatei ist zu offen. Bitte chmod 600 {p0}", p0=key))
             lines.append("password-file = " + json.dumps(str(key), ensure_ascii=False))
         if dest.get("options"):
             lines.append("[repository.options]")
@@ -506,7 +511,7 @@ class Engine:
 
     def run(self, name, args, *, dry_run=False, capture=True, progress=False, timeout=120, hook=None):
         if self.cancelled:
-            raise Error("Vorgang abgebrochen.")
+            raise Error(tr("Vorgang abgebrochen."))
         dest = self.dest(name)
         self.folder(name)
         if not hook and not dry_run and name not in self.prepared:
@@ -561,11 +566,11 @@ class Engine:
                             patterns += "\n!" + literal + "\n!" + literal.rstrip("/") + "/**\n"
                         atomic(globs, patterns)
                 if self.cancelled:
-                    raise Error("Vorgang abgebrochen.")
+                    raise Error(tr("Vorgang abgebrochen."))
                 atomic(profile, self._profile(dest, repository))
                 binary = shutil.which(self.config.get("rustic_binary", "rustic"))
                 if not binary:
-                    raise Error("rustic wurde nicht gefunden. Bitte rustic installieren.")
+                    raise Error(tr("rustic wurde nicht gefunden. Bitte rustic installieren."))
                 command = [binary, "-P", str(profile)]
                 command += (
                     ["--json-progress", "--progress-interval", "500ms"] if progress else ["--no-progress"]
@@ -594,7 +599,7 @@ class Engine:
                     sel.register(self.child.stderr, selectors.EVENT_READ, "err")
                     while sel.get_map():
                         if timeout and time.monotonic() - started > timeout:
-                            raise Error("Zeitlimit überschritten; Ziel möglicherweise nicht erreichbar.")
+                            raise Error(tr("Zeitlimit überschritten; Ziel möglicherweise nicht erreichbar."))
                         if self.cancelled:
                             if aborted_at is None:
                                 aborted_at = time.monotonic()
@@ -613,11 +618,11 @@ class Engine:
                                 output.extend(block)
                                 if len(output) > MAX_OUTPUT:
                                     raise Error(
-                                        "Ausgabe zu groß (32 MiB). Es werden keine unvollständigen Listen angezeigt."
+                                        tr("Ausgabe zu groß (32 MiB). Es werden keine unvollständigen Listen angezeigt.")
                                     )
                             pending[stream] += block
                             if len(pending[stream]) > MAX_OUTPUT:
-                                raise Error("Einzelne Ausgabezeile zu groß.")
+                                raise Error(tr("Einzelne Ausgabezeile zu groß."))
                             lines = pending[stream].split(b"\n")
                             pending[stream] = lines.pop()
                             for raw in lines:
@@ -641,9 +646,9 @@ class Engine:
                                     self.log(name, text)
                 code = self.child.wait()
                 if self.cancelled:
-                    raise Error("Vorgang abgebrochen.")
+                    raise Error(tr("Vorgang abgebrochen."))
                 if code:
-                    raise Error(tail.strip() or f"Befehl fehlgeschlagen (Exit {code}).")
+                    raise Error(tail.strip() or tr("Befehl fehlgeschlagen (Exit {p0}).", p0=code))
                 return output.decode("utf-8"), warned
             finally:
                 if self.child.poll() is None:
@@ -659,7 +664,7 @@ class Engine:
         try:
             data = json.loads(raw)
             if not isinstance(data, list):
-                raise ValueError("keine Liste")
+                raise ValueError(tr("keine Liste"))
             result = []
             for item in data:
                 result.extend(item["snapshots"] if "snapshots" in item else [item])
@@ -667,7 +672,7 @@ class Engine:
                 safe_snapshot(snapshot["id"])
             return sorted(result, key=lambda x: x["time"], reverse=True)
         except (KeyError, TypeError, ValueError) as exc:
-            raise Error("Unerwartete Snapshot-Ausgabe von rustic.") from exc
+            raise Error(tr("Unerwartete Snapshot-Ausgabe von rustic.")) from exc
 
     def ls(self, name, snapshot, path):
         snapshot, path = safe_snapshot(snapshot), safe_path(path)
@@ -683,11 +688,11 @@ class Engine:
                     or "/" in filename
                     or "\0" in filename
                 ):
-                    raise ValueError("ungültiger Dateiname")
+                    raise ValueError(tr("ungültiger Dateiname"))
                 result.append({**node, "path": str(PurePosixPath(path) / filename)})
             return sorted(result, key=lambda x: (x["type"] != "dir", x["name"].casefold()))
         except (KeyError, TypeError, ValueError) as exc:
-            raise Error("Unerwartete Verzeichnis-Ausgabe von rustic.") from exc
+            raise Error(tr("Unerwartete Verzeichnis-Ausgabe von rustic.")) from exc
 
     def refresh_stats(self, name):
         snapshots = self.snapshots(name)
@@ -695,7 +700,7 @@ class Engine:
         try:
             size = sum(x["size"] for x in json.loads(raw)["files"]["repo"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise Error("Unerwartete Repository-Statistik.") from exc
+            raise Error(tr("Unerwartete Repository-Statistik.")) from exc
         self.update(name, snapshot_count=len(snapshots), repository_bytes=size, stats_updated=now())
 
     def initialize(self, name):
@@ -707,7 +712,7 @@ class Engine:
         with self.operation(name, "check"):
             _, warned = self.run(name, ["check"], capture=False, progress=True, timeout=None)
             if warned:
-                raise Error("rustic meldete Warnungen bei der Prüfung; siehe Protokoll.")
+                raise Error(tr("rustic meldete Warnungen bei der Prüfung; siehe Protokoll."))
             self.update(name, last_check=now())
 
     def backup(self, name, dry_run=False):
@@ -719,7 +724,7 @@ class Engine:
                 sources = [str(expand(s)) for s in sources]
                 for source in sources:
                     if not Path(source).exists():
-                        raise Error(f"Backup-Quelle fehlt: {source}")
+                        raise Error(tr("Backup-Quelle fehlt: {p0}", p0=source))
                 args = ["backup", "--json", "--label", APP]
                 if not dry_run:
                     args.append("--init")  # rustic leaves existing repositories intact.
@@ -727,7 +732,7 @@ class Engine:
                 if exclude.exists():
                     patterns = exclude.read_text()
                 elif "exclude_file" in self.config:
-                    raise Error(f"Ausschlussdatei fehlt: {exclude}")
+                    raise Error(tr("Ausschlussdatei fehlt: {p0}", p0=exclude))
                 else:
                     patterns = ""
                 # Avoid backing up the repository, keys, live state and restored copies.
@@ -765,13 +770,13 @@ class Engine:
                     )
                 if warned:
                     raise Error(
-                        "rustic meldete Warnungen. Sicherung gilt nicht als vollständig; Aufbewahrung wurde nicht ausgeführt. Siehe Protokoll."
+                        tr("rustic meldete Warnungen. Sicherung gilt nicht als vollständig; Aufbewahrung wurde nicht ausgeführt. Siehe Protokoll.")
                     )
                 if dry_run:
                     return {"ok": True, "dry_run": True}
                 if not self.state(name).get("progress", {}).get("snapshot_id"):
                     raise Error(
-                        "rustic bestätigte keinen neuen Snapshot. Bitte Version und Protokoll prüfen."
+                        tr("rustic bestätigte keinen neuen Snapshot. Bitte Version und Protokoll prüfen.")
                     )
                 stamp = now()
                 self.update(name, last_success=stamp, last_backup_status="success", backup_error=None)
@@ -784,19 +789,19 @@ class Engine:
                 try:
                     _, warned = self.run(name, retention_args, capture=False, timeout=None)
                     if warned:
-                        raise Error("rustic meldete Warnungen bei der Bereinigung; siehe Protokoll.")
+                        raise Error(tr("rustic meldete Warnungen bei der Bereinigung; siehe Protokoll."))
                     self.update(name, maintenance_error=None)
                 except Error as exc:
                     if self.cancelled:
                         raise
-                    self.log(name, f"Aufbewahrung fehlgeschlagen: {exc}")
+                    self.log(name, tr("Aufbewahrung fehlgeschlagen: {p0}", p0=exc))
                     self.update(name, maintenance_error=str(exc))
                 try:
                     self.refresh_stats(name)
                 except Error as exc:
                     if self.cancelled:
                         raise
-                    self.log(name, f"Statistik nicht aktualisiert: {exc}")
+                    self.log(name, tr("Statistik nicht aktualisiert: {p0}", p0=exc))
                 return {"ok": True, "last_success": stamp}
             except BaseException as exc:
                 if not dry_run:
@@ -807,7 +812,7 @@ class Engine:
                         backup_error=str(exc),
                     )
                     if not self.cancelled:
-                        self.notify("Backup fehlgeschlagen", dest.get("display_name", name))
+                        self.notify(tr("Backup fehlgeschlagen"), dest.get("display_name", name))
                         if dest.get("on_failure_command"):
                             with contextlib.suppress(Exception):
                                 self.run(
@@ -826,7 +831,7 @@ class Engine:
         args = ["notify-send", "--app-name", "CachyOS Time Machine", "--icon", "document-revert"]
         if path:
             # Detached notification waits for a click without blocking CLI or timer.
-            args += ["--action", "open=In Dolphin öffnen", "--wait", "--expire-time", "10000"]
+            args += ["--action", tr("open=In Dolphin öffnen"), "--wait", "--expire-time", "10000"]
             script = "import subprocess,sys; r=subprocess.run(sys.argv[2:],capture_output=True,text=True); subprocess.Popen(['xdg-open',sys.argv[1]]) if r.stdout.strip()=='open' else None"
             subprocess.Popen(
                 [sys.executable, "-c", script, str(path), *args, title, message],
@@ -858,7 +863,7 @@ class Engine:
                 timeout=None,
             )
             self.update(name, last_restored=str(item))
-        self.notify("Wiederherstellung abgeschlossen", str(item), item if item.is_dir() else item.parent)
+        self.notify(tr("Wiederherstellung abgeschlossen"), str(item), item if item.is_dir() else item.parent)
         return {"ok": True, "target": str(folder), "restored": str(item)}
 
     def install_timers(self, enable=True):
@@ -872,7 +877,7 @@ class Engine:
                     ["systemd-analyze", "calendar", dest["schedule"]], capture_output=True, text=True
                 )
                 if result.returncode:
-                    raise Error(f"Ungültiger Zeitplan für {dest['name']}: {result.stderr}")
+                    raise Error(tr("Ungültiger Zeitplan für {p0}: {p1}", p0=dest['name'], p1=result.stderr))
         command = [
             sys.executable,
             "-m",

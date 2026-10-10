@@ -5,6 +5,19 @@ from pathlib import Path
 import pytest
 
 from timemachine.core import Engine, atomic
+from timemachine.i18n import configure
+
+
+@pytest.fixture(autouse=True)
+def german_test_language(monkeypatch):
+    # Existing assertions use German; language tests explicitly exercise overrides.
+    monkeypatch.setenv("LANG", "de_DE.UTF-8")
+    monkeypatch.setenv("LANGUAGE", "de")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    configure("system")
+    yield
+    configure("system")
 
 
 @pytest.hookimpl(hookwrapper=True)

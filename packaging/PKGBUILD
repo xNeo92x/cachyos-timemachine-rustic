@@ -1,5 +1,5 @@
 pkgname=cachyos-timemachine-rustic-git
-pkgver=0.2.7
+pkgver=0.2.8
 pkgrel=1
 pkgdesc='Time Machine style backups for CachyOS KDE, powered by rustic'
 arch=('any')
@@ -14,7 +14,7 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/cachyos-timemachine-rustic"
-  printf '0.2.7.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf '0.2.8.r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {
@@ -35,4 +35,5 @@ EOF
   cp -r plasma/org.cachyos.timemachine "$pkgdir/usr/share/plasma/plasmoids/"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 README.en.md "$pkgdir/usr/share/doc/$pkgname/README.en.md"
 }

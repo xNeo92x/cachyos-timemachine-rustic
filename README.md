@@ -1,5 +1,7 @@
 # CachyOS Time Machine · rustic
 
+**Deutsch** | [English](README.en.md)
+
 Dateiversionen für CachyOS KDE, inspiriert von
 [Omarchy Time Machine](https://github.com/jankeesvw/omarchy-time-machine).
 Die gesamte Backup-Verarbeitung übernimmt **[rustic](https://github.com/rustic-rs/rustic)**.
@@ -33,6 +35,21 @@ der rustic-CLI. Einstellungs-, Schlüssel- und Protokolldialoge bleiben Qt-Dialo
 - Desktop-Benachrichtigungen und Öffnen der Wiederherstellung in Dolphin.
 - Passwortdatei oder externer Passwortbefehl; optionaler 1Password-Export.
 - Vorbereitungs- und Fehler-Hooks, Protokollaufbewahrung für 30 Tage.
+- Deutsche und englische Oberfläche; Systemsprache als Standard, jederzeit in den Einstellungen änderbar.
+
+## Sprache der Oberfläche
+
+Unter **Einstellungen → Quellen & Ziele → Sprache** stehen **Systemsprache verwenden**,
+**Deutsch** und **English** zur Auswahl. Die Systemsprache ist voreingestellt:
+Deutsch bei deutscher Systemsprache, Englisch bei englischer oder einer anderen
+Systemsprache. KDE-Sprachpräferenzen (`LANGUAGE`) und die Locale-Einstellungen
+werden berücksichtigt.
+
+**Speichern** übernimmt die Sprache sofort in das Plasma-Popup und die Qt-Dialoge;
+eine erneute Anmeldung ist für den Sprachwechsel nicht nötig. Die Auswahl bleibt
+über Neustarts erhalten. Eigene Zielnamen, Pfade, Ausschlussmuster und Zeitpläne
+werden nicht übersetzt oder verändert. Bereits vorhandene Protokolle und von
+rustic selbst ausgegebene Meldungen bleiben in ihrer ursprünglichen Sprache.
 
 ## Installation auf CachyOS KDE
 
@@ -139,6 +156,7 @@ werden, sofern er auch im systemd-Benutzerkontext ohne Eingabe erreichbar ist.
 
 ```json
 {
+  "language": "system",
   "source": ["~"],
   "exclude_file": "excludes.txt",
   "stale_hours": 48,
@@ -161,6 +179,7 @@ Dateibackup mit Versionshistorie, kein bootfähiges Systemabbild.
 
 | Option | Bedeutung |
 | --- | --- |
+| `language` | Globale Oberflächensprache: `system` (Standard), `de` oder `en` |
 | `name` | Eindeutiger Zielname: Buchstaben/Ziffern, `-` oder `_` |
 | `display_name` | Anzeigename, standardmäßig `name` |
 | `repository` | Lokaler Pfad oder native rustic-Backendangabe |

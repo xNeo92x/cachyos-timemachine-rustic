@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-from PySide6.QtCore import QLockFile, QProcess, QStandardPaths, Qt, QTimer, QUrl
+from PySide6.QtCore import QDateTime, QLocale, QLockFile, QProcess, QStandardPaths, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
 from . import __version__
 from .core import APP, RETENTION, Engine, Error, atomic, validate
 from .filepicker import FilePicker
+from .i18n import apply_ui_language, bind_ui, configure_qt, language, tr, translate_message
 from .integration import autostart_enabled, set_autostart
 from .network import NetworkError, is_smb, mounted_url, smb_url
 from .schedule import ScheduleEditor
@@ -69,41 +70,33 @@ def human_size(value):
 
 def date(value):
     if not value:
-        return "Noch nie"
-    import datetime
-
-    try:
-        return (
-            datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
-            .astimezone()
-            .strftime("%d.%m.%Y, %H:%M")
-        )
-    except ValueError:
-        return value
+        return tr("Noch nie")
+    parsed = QDateTime.fromString(value, Qt.DateFormat.ISODate)
+    return QLocale().toString(parsed.toLocalTime(), QLocale.FormatType.ShortFormat) if parsed.isValid() else value
 
 
 def status_text(row):
     if row.get("status") == "running":
         return {
-            "backup": "Sicherung läuft",
-            "restore": "Wiederherstellung läuft",
-            "check": "Repository wird geprüft",
-            "retention": "Alte Sicherungen werden bereinigt",
-            "init": "Repository wird eingerichtet",
-            "dry-run": "Testlauf",
-            "stats": "Statistik wird gelesen",
-        }.get(row.get("phase"), "Vorgang läuft")
+            "backup": tr("Sicherung läuft"),
+            "restore": tr("Wiederherstellung läuft"),
+            "check": tr("Repository wird geprüft"),
+            "retention": tr("Alte Sicherungen werden bereinigt"),
+            "init": tr("Repository wird eingerichtet"),
+            "dry-run": tr("Testlauf"),
+            "stats": tr("Statistik wird gelesen"),
+        }.get(row.get("phase"), tr("Vorgang läuft"))
     if row.get("last_backup_status") == "failed":
-        return "Letztes Backup fehlgeschlagen"
+        return tr("Letztes Backup fehlgeschlagen")
     if row.get("status") in ("failed", "interrupted"):
-        return "Fehler / Vorgang unterbrochen"
+        return tr("Fehler / Vorgang unterbrochen")
     if row.get("maintenance_error"):
-        return "Sicherung erfolgreich · Bereinigung fehlgeschlagen"
+        return tr("Sicherung erfolgreich · Bereinigung fehlgeschlagen")
     if not row.get("can_backup", row.get("has_key")):
-        return "Einrichtung erforderlich"
+        return tr("Einrichtung erforderlich")
     if row.get("stale"):
-        return "Letzte Sicherung ist überfällig"
-    return "Bereit" if not row.get("last_success") else "Deine Dateien sind gesichert"
+        return tr("Letzte Sicherung ist überfällig")
+    return tr("Bereit") if not row.get("last_success") else tr("Deine Dateien sind gesichert")
 
 
 def tray_icon(color):
@@ -165,7 +158,7 @@ class Jobs:
             if callback:
                 callback(result)
             elif not result.get("ok"):
-                self.window.error(result.get("error", "Vorgang fehlgeschlagen."))
+                self.window.error(result.get("error", tr("Vorgang fehlgeschlagen.")))
             self.window.refresh()
             process.deleteLater()
 
@@ -184,7 +177,7 @@ class Settings(QDialog):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
-        self.setWindowTitle("Time Machine einrichten")
+        self.setWindowTitle(tr("Time Machine einrichten"))
         self.resize(780, 700)
         self.config = json.loads(json.dumps(window.engine.config))
         self.index = None
@@ -195,49 +188,57 @@ class Settings(QDialog):
         layout.addWidget(tabs)
         basic = QWidget()
         form = QFormLayout(basic)
-        self.autostart = QCheckBox("Bei der KDE-Anmeldung automatisch starten")
+        self.autostart = QCheckBox(tr("Bei der KDE-Anmeldung automatisch starten"))
         self.autostart.setChecked(autostart_enabled())
-        form.addRow("Systemintegration", self.autostart)
+        form.addRow(tr("Systemintegration"), self.autostart)
+        self.language = QComboBox()
+        self.language.addItem(tr("Systemsprache verwenden"), "system")
+        self.language.addItem("Deutsch", "de")
+        self.language.addItem("English", "en")
+        self.language.setCurrentIndex(self.language.findData(self.config.get("language", "system")))
+        form.addRow(tr("Sprache"), self.language)
+        language_note = QLabel(tr("Die Sprache wird beim Speichern sofort übernommen. Andere Systemsprachen verwenden Englisch."))
+        language_note.setWordWrap(True)
+        form.addRow(language_note)
         self.sources = QPlainTextEdit()
         source = self.config.get("source", "~")
         self.sources.setPlainText("\n".join([source] if isinstance(source, str) else source))
         self.sources.setMaximumHeight(85)
-        form.addRow("Quellen (ein Pfad pro Zeile)", self.sources)
+        form.addRow(tr("Quellen (ein Pfad pro Zeile)"), self.sources)
         form.addRow(self.path_buttons(self.sources))
         self.destinations = QListWidget()
         self.destinations.setMaximumHeight(95)
-        form.addRow("Backup-Ziele", self.destinations)
+        form.addRow(tr("Backup-Ziele"), self.destinations)
         actions = QHBoxLayout()
-        actions.addWidget(button("Ziel hinzufügen", self.add_dest, "list-add"))
-        actions.addWidget(button("Ziel entfernen", self.remove_dest, "list-remove"))
+        actions.addWidget(button(tr("Ziel hinzufügen"), self.add_dest, "list-add"))
+        actions.addWidget(button(tr("Ziel entfernen"), self.remove_dest, "list-remove"))
         form.addRow(actions)
         self.fields = {}
         for key, title, hint in [
-            ("name", "Interner Name", "z. B. nas"),
-            ("display_name", "Anzeigename", "z. B. Synology NAS"),
-            ("repository", "Repository", "Lokaler Ordner oder smb://server/freigabe/backup"),
-            ("pre_command", "Vor Backup ausführen", "Optional: Laufwerk einhängen oder NAS wecken"),
-            ("on_failure_command", "Bei Fehler ausführen", "Optionaler eigener Befehl"),
+            ("name", tr("Interner Name"), tr("z. B. nas")),
+            ("display_name", tr("Anzeigename"), tr("z. B. Synology NAS")),
+            ("repository", "Repository", tr("Lokaler Ordner oder smb://server/freigabe/backup")),
+            ("pre_command", tr("Vor Backup ausführen"), tr("Optional: Laufwerk einhängen oder NAS wecken")),
+            ("on_failure_command", tr("Bei Fehler ausführen"), tr("Optionaler eigener Befehl")),
         ]:
             edit = QLineEdit()
             edit.setPlaceholderText(hint)
             if key == "repository":
                 row = QHBoxLayout()
                 row.addWidget(edit)
-                row.addWidget(button("Ordner auswählen …", self.pick_repository, "folder-open"))
+                row.addWidget(button(tr("Ordner auswählen …"), self.pick_repository, "folder-open"))
                 form.addRow(title, row)
-                form.addRow("", button("NAS / Netzwerk …", lambda: self.pick_repository(network=True), "network-server"))
+                form.addRow("", button(tr("NAS / Netzwerk …"), lambda: self.pick_repository(network=True), "network-server"))
             else:
                 form.addRow(title, edit)
             self.fields[key] = edit
         self.schedule = ScheduleEditor()
-        form.addRow("Zeitplan", self.schedule)
+        form.addRow(tr("Zeitplan"), self.schedule)
         self.options = QPlainTextEdit()
         self.options.setMaximumHeight(105)
-        form.addRow("Backend-Optionen (JSON)", self.options)
+        form.addRow(tr("Backend-Optionen (JSON)"), self.options)
         note = QLabel(
-            "NAS / Netzwerk: SMB-Freigabe und Backup-Ordner auswählen. Zugang in KDE Wallet speichern.\n"
-            "SFTP: opendal:sftp mit user, endpoint, root. Cloud: opendal:s3. Details siehe README."
+            tr("NAS / Netzwerk: SMB-Freigabe und Backup-Ordner auswählen. Zugang in KDE Wallet speichern.\nSFTP: opendal:sftp mit user, endpoint, root. Cloud: opendal:s3. Details siehe README.")
         )
         note.setWordWrap(True)
         form.addRow(note)
@@ -245,15 +246,15 @@ class Settings(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(basic)
-        tabs.addTab(scroll, "Quellen & Ziele")
+        tabs.addTab(scroll, tr("Quellen & Ziele"))
         policies = QWidget()
         pf = QFormLayout(policies)
         self.retention = {}
         for key, title in [
-            ("daily", "Täglich behalten"),
-            ("weekly", "Wöchentlich behalten"),
-            ("monthly", "Monatlich behalten"),
-            ("yearly", "Jährlich behalten"),
+            ("daily", tr("Täglich behalten")),
+            ("weekly", tr("Wöchentlich behalten")),
+            ("monthly", tr("Monatlich behalten")),
+            ("yearly", tr("Jährlich behalten")),
         ]:
             spin = QSpinBox()
             spin.setRange(0, 10000)
@@ -263,39 +264,39 @@ class Settings(QDialog):
         self.stale = QSpinBox()
         self.stale.setRange(1, 87600)
         self.stale.setValue(int(self.config.get("stale_hours", 48)))
-        pf.addRow("Überfällig nach (Stunden)", self.stale)
+        pf.addRow(tr("Überfällig nach (Stunden)"), self.stale)
         self.excludes = QPlainTextEdit()
         exclude = window.config_dir / self.config.get("exclude_file", "excludes.txt")
         self.excludes.setPlainText(exclude.read_text() if exclude.exists() else "")
-        pf.addRow("Ausschlüsse (rustic-Globs)", self.excludes)
+        pf.addRow(tr("Ausschlüsse (rustic-Globs)"), self.excludes)
         pf.addRow(self.path_buttons(self.excludes, excluded=True))
         pf.addRow(
             QLabel(
-                "Beispiel: !.cache/   ·   !Downloads/   ·   !*.iso\n! schließt aus. Positive Muster schließen ein."
+                tr("Beispiel: !.cache/   ·   !Downloads/   ·   !*.iso\n! schließt aus. Positive Muster schließen ein.")
             )
         )
-        tabs.addTab(policies, "Aufbewahrung & Ausschlüsse")
+        tabs.addTab(policies, tr("Aufbewahrung & Ausschlüsse"))
         advanced = QWidget()
         av = QVBoxLayout(advanced)
         av.addWidget(
             QLabel(
-                "Weitere Optionen (env_file, password_command, Ziel-Aufbewahrung)\nkönnen direkt in config.json bearbeitet werden."
+                tr("Weitere Optionen (env_file, password_command, Ziel-Aufbewahrung)\nkönnen direkt in config.json bearbeitet werden.")
             )
         )
         av.addWidget(
             button(
-                "config.json im Editor öffnen",
+                tr("config.json im Editor öffnen"),
                 lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(window.engine.config_path))),
                 "document-edit",
             )
         )
         av.addWidget(
             QLabel(
-                "Danach diesen Dialog schließen und im Hauptfenster „Neu laden“ wählen.\nEigene Hook-Befehle werden als dein Benutzer ausgeführt."
+                tr("Danach diesen Dialog schließen und im Hauptfenster „Neu laden“ wählen.\nEigene Hook-Befehle werden als dein Benutzer ausgeführt.")
             )
         )
         av.addStretch()
-        tabs.addTab(advanced, "Erweitert")
+        tabs.addTab(advanced, tr("Erweitert"))
         box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         for action in box.buttons():
             action.setAutoDefault(False)
@@ -305,19 +306,20 @@ class Settings(QDialog):
         layout.addWidget(box)
         self.destinations.currentRowChanged.connect(self.select_dest)
         self.rebuild()
+        bind_ui(self)
 
     def path_buttons(self, editor, excluded=False):
         row = QHBoxLayout()
         row.addWidget(
             button(
-                "Dateien ausschließen …" if excluded else "Dateien auswählen …",
+                tr("Dateien ausschließen …") if excluded else tr("Dateien auswählen …"),
                 lambda: self.pick_paths(editor, excluded=excluded),
                 "document-open",
             )
         )
         row.addWidget(
             button(
-                "Ordner ausschließen …" if excluded else "Ordner auswählen …",
+                tr("Ordner ausschließen …") if excluded else tr("Ordner auswählen …"),
                 lambda: self.pick_paths(editor, directory=True, excluded=excluded),
                 "folder-open",
             )
@@ -353,19 +355,19 @@ class Settings(QDialog):
 
     def pick_paths(self, editor, directory=False, excluded=False):
         self.choose_paths(
-            "Ordner auswählen" if directory else "Dateien auswählen",
+            tr("Ordner auswählen") if directory else tr("Dateien auswählen"),
             self.browse_directory, directory,
             lambda paths: self.apply_paths(editor, paths, directory, excluded),
         )
 
     def apply_paths(self, editor, paths, directory=False, excluded=False):
         if any(not Path(path).is_absolute() for path in paths):
-            self.window.error("Für Quellen und Ausschlüsse bitte lokale oder eingehängte Dateien und Ordner auswählen.")
+            self.window.error(tr("Für Quellen und Ausschlüsse bitte lokale oder eingehängte Dateien und Ordner auswählen."))
             return
         if not paths:
             return
         if any("\n" in path or "\r" in path for path in paths):
-            self.window.error("Pfade mit Zeilenumbrüchen werden in Pfad- und Musterlisten nicht unterstützt.")
+            self.window.error(tr("Pfade mit Zeilenumbrüchen werden in Pfad- und Musterlisten nicht unterstützt."))
             return
         lines = editor.toPlainText().splitlines()
         for path in paths:
@@ -389,7 +391,7 @@ class Settings(QDialog):
         else:
             start = str(Path(current).expanduser()) if current and ":" not in current else self.browse_directory
         self.choose_paths(
-            "NAS-Backup-Ordner auswählen" if network else "Backup-Repository auswählen",
+            tr("NAS-Backup-Ordner auswählen") if network else tr("Backup-Repository auswählen"),
             start, True,
             lambda paths: self.apply_repository_url(
                 QUrl.fromLocalFile(paths[0]) if Path(paths[0]).is_absolute() else QUrl(paths[0])
@@ -438,7 +440,7 @@ class Settings(QDialog):
             self.store_dest()
         except ValueError:
             self.window.error(
-                "Backend-Optionen sind kein gültiges JSON. Änderung wird beim Speichern erneut geprüft."
+                tr("Backend-Optionen sind kein gültiges JSON. Änderung wird beim Speichern erneut geprüft.")
             )
         self.index = index if index >= 0 else None
         if self.index is None:
@@ -461,7 +463,7 @@ class Settings(QDialog):
         try:
             self.store_dest()
         except ValueError:
-            self.window.error("Bitte zuerst Backend-Optionen korrigieren.")
+            self.window.error(tr("Bitte zuerst Backend-Optionen korrigieren."))
             return
         count = len(self.config["destinations"]) + 1
         self.config["destinations"].append(
@@ -477,6 +479,7 @@ class Settings(QDialog):
     def save(self):
         try:
             self.store_dest()
+            self.config["language"] = self.language.currentData()
             self.config["source"] = [x.strip() for x in self.sources.toPlainText().splitlines() if x.strip()]
             self.config["retention"] = {k: v.value() for k, v in self.retention.items()}
             self.config["stale_hours"] = self.stale.value()
@@ -503,7 +506,7 @@ class KeyDialog(QDialog):
     def __init__(self, window, name):
         super().__init__(window)
         self.window, self.name = window, name
-        self.setWindowTitle("Backup-Passwort · " + window.engine.dest(name).get("display_name", name))
+        self.setWindowTitle(tr("Backup-Passwort · {p0}", p0=window.engine.dest(name).get("display_name", name)))
         self.setMinimumWidth(480)
         self.busy = False
         layout = QVBoxLayout(self)
@@ -512,23 +515,24 @@ class KeyDialog(QDialog):
         layout.addWidget(self.explanation)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setPlaceholderText("Eigenes Passwort (optional)")
+        self.password.setPlaceholderText(tr("Eigenes Passwort (optional)"))
         self.repeat = QLineEdit()
         self.repeat.setEchoMode(QLineEdit.EchoMode.Password)
-        self.repeat.setPlaceholderText("Passwort wiederholen")
+        self.repeat.setPlaceholderText(tr("Passwort wiederholen"))
         layout.addWidget(self.password)
         layout.addWidget(self.repeat)
         self.message = QLabel()
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
-        self.save_button = button("Passwort speichern", self.save_password)
+        self.save_button = button(tr("Passwort speichern"), self.save_password)
         layout.addWidget(self.save_button)
-        self.reveal_button = button("Anzeigen / verbergen", self.reveal)
+        self.reveal_button = button(tr("Anzeigen / verbergen"), self.reveal)
         layout.addWidget(self.reveal_button)
-        self.export_button = button("In 1Password sichern", self.export_password)
+        self.export_button = button(tr("In 1Password sichern"), self.export_password)
         layout.addWidget(self.export_button)
-        self.close_button = button("Schließen", self.reject)
+        self.close_button = button(tr("Schließen"), self.reject)
         layout.addWidget(self.close_button)
+        bind_ui(self)
         self.refresh_mode()
 
     def refresh_mode(self):
@@ -536,11 +540,10 @@ class KeyDialog(QDialog):
         stored = mode == "stored"
         external = mode == "external"
         self.explanation.setText(
-            "Ein Passwort ist gespeichert. Bewahre es auch außerhalb dieses PCs auf."
-            if stored else "Das Passwort wird über password_command verwaltet."
+            tr("Ein Passwort ist gespeichert. Bewahre es auch außerhalb dieses PCs auf.")
+            if stored else tr("Das Passwort wird über password_command verwaltet.")
             if external else
-            "Ein eigenes Passwort ist optional. Ohne Passwort können Personen mit Zugriff auf das Repository die Sicherungen lesen.\n"
-            "Für eine Sicherung ohne Passwort dieses Fenster einfach schließen."
+            tr("Ein eigenes Passwort ist optional. Ohne Passwort können Personen mit Zugriff auf das Repository die Sicherungen lesen.\nFür eine Sicherung ohne Passwort dieses Fenster einfach schließen.")
         )
         self.password.setVisible(not external)
         self.password.setReadOnly(stored)
@@ -561,10 +564,10 @@ class KeyDialog(QDialog):
     def save_password(self):
         password = self.password.text()
         if not password:
-            self.message.setText("Für eine Sicherung ohne eigenes Passwort dieses Fenster schließen.")
+            self.message.setText(tr("Für eine Sicherung ohne eigenes Passwort dieses Fenster schließen."))
             return
         if password != self.repeat.text():
-            self.message.setText("Passwörter stimmen nicht überein.")
+            self.message.setText(tr("Passwörter stimmen nicht überein."))
             return
         self.submit(["key", "set", "--dest", self.name, "--stdin"], password)
 
@@ -583,9 +586,9 @@ class KeyDialog(QDialog):
             if result.get("ok"):
                 self.window.reload()
                 self.refresh_mode()
-                self.message.setText("Passwort gespeichert." if secret is not None else "In 1Password gesichert.")
+                self.message.setText(tr("Passwort gespeichert.") if secret is not None else tr("In 1Password gesichert."))
             else:
-                self.message.setText(result.get("error", "Passwort konnte nicht gespeichert werden."))
+                self.message.setText(result.get("error", tr("Passwort konnte nicht gespeichert werden.")))
 
         self.window.jobs.start(args, ready, secret)
 
@@ -610,40 +613,40 @@ class RestoreBrowser(QDialog):
         self.window, self.name = window, name
         self.path = "/"
         self.request = 0
-        self.setWindowTitle("Dateien aus einer Sicherung wiederherstellen")
+        self.setWindowTitle(tr("Dateien aus einer Sicherung wiederherstellen"))
         self.resize(940, 640)
         layout = QVBoxLayout(self)
-        heading = QLabel("Zurück zu deinen Dateien")
+        heading = QLabel(tr("Zurück zu deinen Dateien"))
         heading.setObjectName("heading")
         layout.addWidget(heading)
         self.days = QComboBox()
         self.days.currentIndexChanged.connect(self.load_folder)
         layout.addWidget(self.days)
         navigation = QHBoxLayout()
-        navigation.addWidget(button("Nach oben", self.up, "go-up"))
-        navigation.addWidget(button("Wurzel", self.root, "go-home"))
+        navigation.addWidget(button(tr("Nach oben"), self.up, "go-up"))
+        navigation.addWidget(button(tr("Wurzel"), self.root, "go-home"))
         self.location = QLineEdit("/")
         self.location.returnPressed.connect(self.go_path)
         navigation.addWidget(self.location, 1)
         layout.addLayout(navigation)
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Dateien filtern …")
+        self.filter.setPlaceholderText(tr("Dateien filtern …"))
         self.filter.textChanged.connect(self.filter_rows)
         layout.addWidget(self.filter)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Name", "Größe", "Geändert"])
+        self.tree.setHeaderLabels(["Name", tr("Größe"), tr("Geändert")])
         self.tree.setRootIsDecorated(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.tree.itemActivated.connect(self.open_item)
         self.tree.installEventFilter(self)
         layout.addWidget(self.tree, 1)
-        self.message = QLabel("Sicherungen werden gelesen …")
+        self.message = QLabel(tr("Sicherungen werden gelesen …"))
         self.message.setWordWrap(True)
         layout.addWidget(self.message)
         actions = QHBoxLayout()
-        self.restore_selected = button("Auswahl wiederherstellen", self.restore_item, "document-revert")
+        self.restore_selected = button(tr("Auswahl wiederherstellen"), self.restore_item, "document-revert")
         self.restore_folder = button(
-            "Diesen Ordner wiederherstellen", lambda: self.restore(self.path), "folder"
+            tr("Diesen Ordner wiederherstellen"), lambda: self.restore(self.path), "folder"
         )
         self.restore_selected.setEnabled(False)
         self.restore_folder.setEnabled(False)
@@ -653,10 +656,12 @@ class RestoreBrowser(QDialog):
         actions.addWidget(self.restore_selected)
         actions.addWidget(self.restore_folder)
         actions.addStretch()
-        actions.addWidget(button("Schließen", self.close))
+        actions.addWidget(button(tr("Schließen"), self.close))
         layout.addLayout(actions)
         QShortcut(QKeySequence("Alt+Up"), self, activated=self.up)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.filter.setFocus)
+        self.message.setProperty("dynamicLanguage", True)
+        bind_ui(self)
         window.jobs.start(["snapshots", "--dest", name, "--json"], self.snapshots_ready)
 
     def eventFilter(self, obj, event):
@@ -677,7 +682,7 @@ class RestoreBrowser(QDialog):
 
     def snapshots_ready(self, result):
         if not result.get("ok"):
-            self.message.setText(result.get("error", "Sicherungen konnten nicht gelesen werden."))
+            self.message.setText(result.get("error", tr("Sicherungen konnten nicht gelesen werden.")))
             return
         self.days.blockSignals(True)
         for snap in result["snapshots"]:
@@ -691,7 +696,7 @@ class RestoreBrowser(QDialog):
                 self.path = source[0]
             self.load_folder()
         else:
-            self.message.setText("Noch keine Sicherungen vorhanden.")
+            self.message.setText(tr("Noch keine Sicherungen vorhanden."))
 
     def load_folder(self, *_):
         snapshot = self.days.currentData()
@@ -703,22 +708,22 @@ class RestoreBrowser(QDialog):
         self.restore_folder.setEnabled(False)
         self.restore_selected.setEnabled(False)
         self.location.setText(self.path)
-        self.message.setText("Verzeichnis wird gelesen …")
+        self.message.setText(tr("Verzeichnis wird gelesen …"))
 
         def ready(result):
             if request != self.request:
                 return
             if not result.get("ok"):
                 self.message.setText(
-                    result.get("error", "Verzeichnis konnte nicht gelesen werden.")
-                    + "\nMit „Wurzel“ kannst du die Sicherung von oben durchsuchen."
+                    result.get("error", tr("Verzeichnis konnte nicht gelesen werden."))
+                    + tr("\nMit „Wurzel“ kannst du die Sicherung von oben durchsuchen.")
                 )
                 return
             for node in result["entries"]:
                 item = QTreeWidgetItem(
                     [
                         node["name"],
-                        human_size(node.get("size")) if node["type"] != "dir" else "Ordner",
+                        human_size(node.get("size")) if node["type"] != "dir" else tr("Ordner"),
                         date(node.get("mtime")) if node.get("mtime") else "–",
                     ]
                 )
@@ -737,7 +742,7 @@ class RestoreBrowser(QDialog):
             self.filter_rows()
             self.restore_folder.setEnabled(True)
             self.message.setText(
-                f"{len(result['entries'])} Einträge · Wiederherstellung in einen neuen Ordner unter ~/Restored"
+                tr("{p0} Einträge · Wiederherstellung in einen neuen Ordner unter ~/Restored", p0=len(result['entries']))
             )
 
         self.window.jobs.start(
@@ -777,16 +782,16 @@ class RestoreBrowser(QDialog):
         snapshot = self.days.currentData()
         self.restore_selected.setEnabled(False)
         self.restore_folder.setEnabled(False)
-        self.message.setText("Wiederherstellung läuft. Fortschritt im Hauptfenster.")
+        self.message.setText(tr("Wiederherstellung läuft. Fortschritt im Hauptfenster."))
 
         def ready(result):
             self.restore_folder.setEnabled(True)
             self.restore_selected.setEnabled(self.tree.currentItem() is not None)
             if result.get("ok"):
-                self.message.setText("Wiederhergestellt: " + result["restored"])
+                self.message.setText(tr("Wiederhergestellt: ") + result["restored"])
                 QDesktopServices.openUrl(QUrl.fromLocalFile(result["target"]))
             else:
-                self.message.setText(result.get("error", "Wiederherstellung fehlgeschlagen."))
+                self.message.setText(result.get("error", tr("Wiederherstellung fehlgeschlagen.")))
 
         self.window.jobs.start(
             ["restore", "--dest", self.name, "--snapshot", snapshot["id"], "--path", path, "--json"], ready
@@ -811,6 +816,7 @@ class Window(QMainWindow):
         self.dialogs = []
         self.settings_dialog = None
         self.key_dialog = None
+        self.ui_language = None
         self.setWindowTitle("CachyOS Time Machine")
         self.setWindowIcon(tray_icon("#3daee9"))
         self.resize(900, 610)
@@ -825,20 +831,20 @@ class Window(QMainWindow):
         header.addStretch()
         header.addWidget(QLabel("rustic · CachyOS KDE"))
         layout.addLayout(header)
-        layout.addWidget(QLabel("Deine Dateien. Jeder Tag. Ein sicherer Weg zurück."))
+        layout.addWidget(QLabel(tr("Deine Dateien. Jeder Tag. Ein sicherer Weg zurück.")))
         tools = QHBoxLayout()
-        tools.addWidget(button("Einstellungen", self.settings, "configure"))
-        tools.addWidget(button("Neu laden", self.reload, "view-refresh"))
+        tools.addWidget(button(tr("Einstellungen"), self.settings, "configure"))
+        tools.addWidget(button(tr("Neu laden"), self.reload, "view-refresh"))
         tools.addWidget(
             button(
-                "Zeitpläne aktivieren",
+                tr("Zeitpläne aktivieren"),
                 lambda: self.jobs.start(["install"], self.timers_ready),
                 "appointment-new",
             )
         )
         tools.addWidget(
             button(
-                "Zeitpläne pausieren",
+                tr("Zeitpläne pausieren"),
                 lambda: self.jobs.start(["pause"], self.timers_ready),
                 "media-playback-pause",
             )
@@ -870,28 +876,28 @@ class Window(QMainWindow):
         self.error_label.setObjectName("error")
         content.addWidget(self.error_label)
         content.addStretch()
-        self.backup_button = button("Jetzt sichern", lambda: self.action("backup"), "document-save")
-        self.restore_button = button("Dateien wiederherstellen", self.restore, "document-revert")
+        self.backup_button = button(tr("Jetzt sichern"), lambda: self.action("backup"), "document-save")
+        self.restore_button = button(tr("Dateien wiederherstellen"), self.restore, "document-revert")
         content.addWidget(self.backup_button)
         content.addWidget(self.restore_button)
         actions = QHBoxLayout()
-        self.check_button = button("Prüfen", lambda: self.action("check"), "checkmark")
-        self.dry_button = button("Testlauf", lambda: self.action("backup", ["--dry-run"]), "system-run")
-        self.cancel_button = button("Abbrechen", lambda: self.action("cancel"), "process-stop")
+        self.check_button = button(tr("Prüfen"), lambda: self.action("check"), "checkmark")
+        self.dry_button = button(tr("Testlauf"), lambda: self.action("backup", ["--dry-run"]), "system-run")
+        self.cancel_button = button(tr("Abbrechen"), lambda: self.action("cancel"), "process-stop")
         actions.addWidget(self.check_button)
         actions.addWidget(self.dry_button)
         actions.addWidget(self.cancel_button)
         content.addLayout(actions)
         keys = QHBoxLayout()
-        keys.addWidget(button("Schlüssel", self.key_menu, "dialog-password"))
-        self.init_button = button("Repository initialisieren", lambda: self.action("init"), "folder-new")
+        keys.addWidget(button(tr("Schlüssel"), self.key_menu, "dialog-password"))
+        self.init_button = button(tr("Repository initialisieren"), lambda: self.action("init"), "folder-new")
         keys.addWidget(self.init_button)
-        keys.addWidget(button("Protokoll", self.logs, "view-list-text"))
+        keys.addWidget(button(tr("Protokoll"), self.logs, "view-list-text"))
         content.addLayout(keys)
         split.addWidget(panel)
         split.setStretchFactor(1, 1)
         layout.addWidget(split, 1)
-        footer = QLabel(f"Version {__version__} · Verschlüsselt und dedupliziert mit rustic")
+        footer = QLabel(tr("Version {p0} · Verschlüsselt und dedupliziert mit rustic", p0=__version__))
         footer.setObjectName("footer")
         layout.addWidget(footer)
         # Fonts/spacing only: colors and controls come from the current KDE/Qt theme.
@@ -910,6 +916,7 @@ class Window(QMainWindow):
         )
         if not native_panel:
             self.tray.show()
+        bind_ui(self)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(2000)
@@ -921,10 +928,10 @@ class Window(QMainWindow):
     def timers_ready(self, result):
         if result.get("ok"):
             QMessageBox.information(
-                self, "Zeitpläne", "Zeitpläne aktiviert." if result.get("enabled") else "Zeitpläne pausiert."
+                self, tr("Zeitpläne"), tr("Zeitpläne aktiviert.") if result.get("enabled") else tr("Zeitpläne pausiert.")
             )
         else:
-            self.error(result.get("error", "Zeitpläne konnten nicht angepasst werden."))
+            self.error(result.get("error", tr("Zeitpläne konnten nicht angepasst werden.")))
 
     def reload(self):
         try:
@@ -934,6 +941,18 @@ class Window(QMainWindow):
             self.error(str(exc))
 
     def refresh(self):
+        if self.ui_language != language():
+            self.ui_language = language()
+            configure_qt()
+            apply_ui_language(self)
+            self.last_menu = None
+            if self.key_dialog:
+                self.key_dialog.refresh_mode()
+            for editor in self.findChildren(ScheduleEditor):
+                loading = editor.loading
+                editor.loading = True
+                editor.changed()
+                editor.loading = loading
         try:
             rows = self.engine.status()
         except (Error, OSError) as exc:
@@ -979,21 +998,21 @@ class Window(QMainWindow):
             self.last_menu = signature
             previous_menu = self.tray.contextMenu()
             menu = QMenu(self)
-            menu.addAction("Time Machine öffnen", self.show_window)
+            menu.addAction(tr("Time Machine öffnen"), self.show_window)
             for row in rows:
                 dest_menu = menu.addMenu(row["display_name"])
                 name = row["name"]
                 dest_menu.addAction(
-                    "Jetzt sichern", lambda checked=False, n=name: self.action("backup", name=n)
+                    tr("Jetzt sichern"), lambda checked=False, n=name: self.action("backup", name=n)
                 )
-                dest_menu.addAction("Dateien wiederherstellen", lambda checked=False, n=name: self.restore(n))
+                dest_menu.addAction(tr("Dateien wiederherstellen"), lambda checked=False, n=name: self.restore(n))
                 dest_menu.addAction(
-                    "Repository prüfen", lambda checked=False, n=name: self.action("check", name=n)
+                    tr("Repository prüfen"), lambda checked=False, n=name: self.action("check", name=n)
                 )
-                dest_menu.addAction("Abbrechen", lambda checked=False, n=name: self.action("cancel", name=n))
+                dest_menu.addAction(tr("Abbrechen"), lambda checked=False, n=name: self.action("cancel", name=n))
             menu.addSeparator()
-            menu.addAction("Einstellungen", self.settings)
-            menu.addAction("Beenden", self.quit)
+            menu.addAction(tr("Einstellungen"), self.settings)
+            menu.addAction(tr("Beenden"), self.quit)
             self.tray.setContextMenu(menu)
             if previous_menu:
                 previous_menu.deleteLater()
@@ -1010,22 +1029,22 @@ class Window(QMainWindow):
         self.label.setText(row["display_name"])
         self.status_label.setText(status_text(row))
         self.info.setText(
-            "Letzte erfolgreiche Sicherung: "
+            tr("Letzte erfolgreiche Sicherung: ")
             + date(row.get("last_success"))
-            + "\nLetzte Prüfung: "
+            + tr("\nLetzte Prüfung: ")
             + date(row.get("last_check"))
-            + "\nZeitplan: "
-            + (row.get("schedule") or "Nur auf Anfrage")
+            + tr("\nZeitplan: ")
+            + (row.get("schedule") or tr("Nur auf Anfrage"))
             + (
-                " · aktiviert"
+                tr(" · aktiviert")
                 if row.get("schedule_enabled")
-                else " · pausiert / noch nicht installiert"
+                else tr(" · pausiert / noch nicht installiert")
                 if row.get("schedule")
                 else ""
             )
             + "\nSnapshots: "
             + str(row.get("snapshot_count", "–"))
-            + "   ·   Gespeichert: "
+            + tr("   ·   Gespeichert: ")
             + human_size(row.get("repository_bytes"))
             + "\n"
             + row["repository"]
@@ -1045,7 +1064,7 @@ class Window(QMainWindow):
             if row.get("last_backup_status") == "failed"
             else row.get("error") or row.get("maintenance_error")
         )
-        self.error_label.setText((error or "")[-1500:])
+        self.error_label.setText(translate_message(error or "")[-1500:])
         for btn in (
             self.backup_button,
             self.restore_button,
@@ -1067,7 +1086,7 @@ class Window(QMainWindow):
             self.settings_dialog.activateWindow()
             return
         if any(r.get("status") == "running" for r in self.rows):
-            self.error("Bitte laufende Vorgänge zuerst abschließen oder abbrechen.")
+            self.error(tr("Bitte laufende Vorgänge zuerst abschließen oder abbrechen."))
             return
         dialog = Settings(self)
         self.settings_dialog = dialog
@@ -1096,14 +1115,15 @@ class Window(QMainWindow):
         if not name:
             return
         dialog = QDialog(self)
-        dialog.setWindowTitle("Protokoll · " + name)
+        dialog.setWindowTitle(tr("Protokoll · {p0}", p0=name))
         dialog.resize(850, 550)
         layout = QVBoxLayout(dialog)
         text = QPlainTextEdit()
         text.setReadOnly(True)
-        text.setPlainText(self.engine.logs(name) or "Noch keine Protokolle vorhanden.")
+        text.setPlainText(self.engine.logs(name) or tr("Noch keine Protokolle vorhanden."))
         layout.addWidget(text)
-        layout.addWidget(button("Schließen", dialog.close))
+        layout.addWidget(button(tr("Schließen"), dialog.close))
+        bind_ui(dialog)
         dialog.exec()
 
     def key_menu(self, name=None):
@@ -1116,7 +1136,7 @@ class Window(QMainWindow):
             self.key_dialog.activateWindow()
             return
         if self.jobs.processes or any(r.get("status") == "running" for r in self.rows):
-            self.error("Bitte laufende Vorgänge zuerst abschließen oder abbrechen.")
+            self.error(tr("Bitte laufende Vorgänge zuerst abschließen oder abbrechen."))
             return
         dialog = KeyDialog(self, name)
         self.key_dialog = dialog
@@ -1147,7 +1167,7 @@ class Window(QMainWindow):
 
     def quit(self):
         if self.jobs.processes:
-            self.error("Es laufen noch Vorgänge. Bitte zuerst abschließen oder abbrechen.")
+            self.error(tr("Es laufen noch Vorgänge. Bitte zuerst abschließen oder abbrechen."))
             return
         QApplication.quit()
 
@@ -1171,12 +1191,12 @@ def main(config_dir=None, state_dir=None):
     runtime = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.RuntimeLocation)
     lock = QLockFile(str(Path(runtime) / (APP + ".lock")))
     if not lock.tryLock(100):
-        QMessageBox.information(None, "Time Machine", "Time Machine läuft bereits im KDE-Systemabschnitt.")
+        QMessageBox.information(None, "Time Machine", tr("Time Machine läuft bereits im KDE-Systemabschnitt."))
         return 0
     try:
         window = Window(config_dir, state_dir)
     except (Error, OSError) as exc:
-        QMessageBox.warning(None, "Konfiguration fehlerhaft", str(exc))
+        QMessageBox.warning(None, tr("Konfiguration fehlerhaft"), str(exc))
         return 1
     if not QSystemTrayIcon.isSystemTrayAvailable() or "--tray" not in sys.argv:
         window.show()

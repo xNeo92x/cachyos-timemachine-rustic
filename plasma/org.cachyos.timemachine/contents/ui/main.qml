@@ -30,6 +30,12 @@ PlasmoidItem {
     property int snapshotIndex: -1
     property var snapshots: []
     property bool statusPending: false
+    property string language: Qt.locale().name.toLowerCase().startsWith("de") ? "de" : "en"
+    property var translations: ({})
+
+    function tr(source) {
+        return translations[source] || source;
+    }
 
     function action(command, options, callback, destination) {
         call("Action", [command, destination || (selected ? selected.name : ""), JSON.stringify(options || {})], result => {
@@ -169,6 +175,8 @@ PlasmoidItem {
             }
             serviceError = "";
             const name = selected ? selected.name : "";
+            language = result.language || language;
+            translations = result.translations || {};
             rows = result.destinations;
             selected = rows.find(r => r.name === name) || (rows.length ? rows[0] : null);
             autostart = result.autostart;
@@ -188,7 +196,7 @@ PlasmoidItem {
             path: path
         }, result => {
             loading = false;
-            message = result.ok ? "Wiederhergestellt: " + result.restored : result.error;
+            message = result.ok ? root.tr("Wiederhergestellt: ") + result.restored : result.error;
             if (result.ok)
                 Qt.openUrlExternally("file://" + result.target.split("/").map(encodeURIComponent).join("/"));
         });
@@ -199,7 +207,7 @@ PlasmoidItem {
     // Leave preferredRepresentation unset: SystemTrayState only hosts popups
     // for applets without a forced representation.
     toolTipMainText: "CachyOS Time Machine"
-    toolTipSubText: rows.length ? rows.map(r => r.display_name + ": " + r.status_text).join("\n") : "Verschlüsselte Backups mit rustic"
+    toolTipSubText: rows.length ? rows.map(r => r.display_name + ": " + r.status_text).join("\n") : root.tr("Verschlüsselte Backups mit rustic")
 
     compactRepresentation: Item {
         implicitHeight: implicitWidth
@@ -246,7 +254,7 @@ PlasmoidItem {
 
             PC.ToolButton {
                 icon.name: "go-previous"
-                text: "Zurück"
+                text: root.tr("Zurück")
                 visible: root.browser
 
                 onClicked: {
@@ -259,11 +267,11 @@ PlasmoidItem {
             PC.Label {
                 Layout.fillWidth: true
                 font.bold: true
-                text: root.browser ? "Dateien wiederherstellen" : "Time Machine"
+                text: root.browser ? root.tr("Dateien wiederherstellen") : "Time Machine"
             }
             PC.ToolButton {
                 icon.name: "configure"
-                text: "Einstellungen"
+                text: root.tr("Einstellungen")
 
                 onClicked: root.dialog("settings")
             }
@@ -271,7 +279,7 @@ PlasmoidItem {
         PC.Label {
             Layout.fillWidth: true
             color: Kirigami.Theme.negativeTextColor
-            text: root.serviceError + "\nBitte python install.py ausführen."
+            text: root.serviceError + root.tr("\nBitte python install.py ausführen.")
             visible: !!root.serviceError
             wrapMode: Text.Wrap
         }
@@ -342,7 +350,7 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 currentIndex: root.snapshotIndex
                 enabled: !root.loading
-                model: root.snapshots.map(s => new Date(s.time).toLocaleString() + " · " + s.id.substring(0, 8))
+                model: root.snapshots.map(s => new Date(s.time).toLocaleString(Qt.locale(root.language === "de" ? "de_DE" : "en_US")) + " · " + s.id.substring(0, 8))
 
                 onActivated: {
                     root.snapshotIndex = currentIndex;
@@ -374,7 +382,7 @@ PlasmoidItem {
             }
             PC.TextField {
                 Layout.fillWidth: true
-                placeholderText: "Dateien filtern …"
+                placeholderText: root.tr("Dateien filtern …")
 
                 onTextChanged: root.filter = text
             }
@@ -413,13 +421,13 @@ PlasmoidItem {
             RowLayout {
                 PC.Button {
                     enabled: !!root.selectedPath && !root.loading
-                    text: "Auswahl wiederherstellen"
+                    text: root.tr("Auswahl wiederherstellen")
 
                     onClicked: root.restorePath(root.selectedPath)
                 }
                 PC.Button {
                     enabled: root.snapshotIndex >= 0 && !root.loading
-                    text: "Diesen Ordner"
+                    text: root.tr("Diesen Ordner")
 
                     onClicked: root.restorePath(root.folder)
                 }
@@ -431,14 +439,14 @@ PlasmoidItem {
 
             PC.Label {
                 font.bold: true
-                text: root.selected ? root.selected.display_name : "Noch kein Backup-Ziel eingerichtet"
+                text: root.selected ? root.selected.display_name : root.tr("Noch kein Backup-Ziel eingerichtet")
             }
             PC.Button {
                 Layout.fillWidth: true
                 enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-save"
                 objectName: "backupNowButton"
-                text: "Jetzt sichern"
+                text: root.tr("Jetzt sichern")
 
                 onClicked: root.action("backup")
             }
@@ -446,20 +454,20 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
                 icon.name: "document-revert"
-                text: "Dateien wiederherstellen …"
+                text: root.tr("Dateien wiederherstellen …")
 
                 onClicked: root.browse()
             }
             RowLayout {
                 PC.Button {
                     enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: "Prüfen"
+                    text: root.tr("Prüfen")
 
                     onClicked: root.action("check")
                 }
                 PC.Button {
                     enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: "Testlauf"
+                    text: root.tr("Testlauf")
 
                     onClicked: root.action("backup", {
                         dry_run: true
@@ -467,7 +475,7 @@ PlasmoidItem {
                 }
                 PC.Button {
                     enabled: root.selected && root.selected.status === "running"
-                    text: "Abbrechen"
+                    text: root.tr("Abbrechen")
 
                     onClicked: root.action("cancel")
                 }
@@ -476,19 +484,19 @@ PlasmoidItem {
                 PC.Button {
                     enabled: root.selected && root.selected.status !== "running"
                     objectName: "backupKeyButton"
-                    text: "Passwort …"
+                    text: root.tr("Passwort …")
 
                     onClicked: root.dialog("keys")
                 }
                 PC.Button {
                     enabled: root.selected && root.selected.can_backup && root.selected.status !== "running"
-                    text: "Initialisieren"
+                    text: root.tr("Initialisieren")
 
                     onClicked: root.action("init")
                 }
                 PC.Button {
                     enabled: !!root.selected
-                    text: "Protokoll"
+                    text: root.tr("Protokoll")
 
                     onClicked: root.dialog("logs")
                 }
@@ -496,20 +504,20 @@ PlasmoidItem {
             RowLayout {
                 PC.Button {
                     enabled: !root.running
-                    text: "Zeitpläne aktivieren"
+                    text: root.tr("Zeitpläne aktivieren")
 
                     onClicked: root.action("install")
                 }
                 PC.Button {
                     enabled: !root.running
-                    text: "Pausieren"
+                    text: root.tr("Pausieren")
 
                     onClicked: root.action("pause")
                 }
             }
             PC.Switch {
                 checked: root.autostart
-                text: "Autostart bei KDE-Anmeldung"
+                text: root.tr("Autostart bei KDE-Anmeldung")
 
                 onToggled: root.call("Autostart", [checked], result => {
                     if (!result.ok)
@@ -522,7 +530,7 @@ PlasmoidItem {
             Layout.fillWidth: true
             elide: Text.ElideRight
             maximumLineCount: 5
-            text: root.message
+            text: root.tr(root.message)
             visible: !!root.message
             wrapMode: Text.Wrap
         }

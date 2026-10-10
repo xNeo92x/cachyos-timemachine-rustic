@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication
 from . import __version__
 from .core import Engine, Error
 from .gui import Window, date, human_size, status_text
+from .i18n import EN, language, tr, translate_message
 from .integration import (
     OBJECT,
     SERVICE,
@@ -43,6 +44,9 @@ class Bridge(QObject):
             rows = []
             for row in self.window.rows:
                 item = dict(row)
+                for key in ("backup_error", "error", "maintenance_error"):
+                    if item.get(key):
+                        item[key] = translate_message(item[key])
                 item.update(
                     status_text=status_text(row),
                     last_success_text=date(row.get("last_success")),
@@ -56,6 +60,8 @@ class Bridge(QObject):
                     "autostart": autostart_enabled(),
                     "open_requested": self.open_requested,
                     "version": __version__,
+                    "language": language(),
+                    "translations": EN if language() == "en" else {},
                     "platform": QApplication.platformName(),
                     "key_dialog_visible": bool(self.window.key_dialog and self.window.key_dialog.isVisible()),
                 }
@@ -81,7 +87,7 @@ class Bridge(QObject):
         try:
             extra = json.loads(options)
             if not isinstance(extra, dict):
-                raise Error("Ungültige Optionen.")
+                raise Error(tr("Ungültige Optionen."))
             if command not in {
                 "backup",
                 "check",
@@ -95,7 +101,7 @@ class Bridge(QObject):
                 "install",
                 "pause",
             }:
-                raise Error("Unbekannte Aktion.")
+                raise Error(tr("Unbekannte Aktion."))
             args = [command]
             if command not in {"install", "pause"}:
                 self.window.engine.dest(name)
@@ -105,11 +111,11 @@ class Bridge(QObject):
             if command in {"ls", "restore"}:
                 for key in ("snapshot", "path"):
                     if not isinstance(extra.get(key), str) or not extra[key]:
-                        raise Error("Snapshot und Pfad erforderlich.")
+                        raise Error(tr("Snapshot und Pfad erforderlich."))
                     args += ["--" + key, extra[key]]
             if command == "restore" and "target" in extra:
                 if not isinstance(extra["target"], str) or not extra["target"]:
-                    raise Error("Ungültiges Wiederherstellungsziel.")
+                    raise Error(tr("Ungültiges Wiederherstellungsziel."))
                 args += ["--target", extra["target"]]
             # Bounded response cache. Never evict an operation that is still running.
             for key in list(self.results):
@@ -118,7 +124,7 @@ class Bridge(QObject):
                 if self.results[key].get("done"):
                     del self.results[key]
             if len(self.results) >= 64:
-                raise Error("Zu viele laufende Anfragen.")
+                raise Error(tr("Zu viele laufende Anfragen."))
             token = uuid.uuid4().hex
             self.results[token] = {"done": False}
 
@@ -134,7 +140,7 @@ class Bridge(QObject):
     def Result(self, token):
         return encoded(
             self.results.get(
-                token, {"done": True, "result": {"ok": False, "error": "Anfrage nicht mehr vorhanden."}}
+                token, {"done": True, "result": {"ok": False, "error": tr("Anfrage nicht mehr vorhanden.")}}
             )
         )
 
@@ -148,7 +154,7 @@ class Bridge(QObject):
             "logs": self.window.logs,
         }
         if action not in actions:
-            return encoded({"ok": False, "error": "Unbekannter Dialog."})
+            return encoded({"ok": False, "error": tr("Unbekannter Dialog.")})
         try:
             if action != "settings":
                 self.window.engine.dest(name)
@@ -164,7 +170,7 @@ class Bridge(QObject):
     @Slot(result=str)
     def Shutdown(self):
         if self.window.jobs.processes:
-            return encoded({"ok": False, "error": "Es laufen noch Vorgänge."})
+            return encoded({"ok": False, "error": tr("Es laufen noch Vorgänge.")})
         QTimer.singleShot(0, QApplication.quit)
         return encoded({"ok": True})
 
@@ -232,12 +238,12 @@ def request_popup(config_dir=None, state_dir=None):
     app = QApplication.instance() or QApplication([sys.argv[0]])
     bus = QDBusConnection.sessionBus()
     if not bus.isConnected():
-        print("Keine KDE-Sitzung erreichbar.", file=sys.stderr)
+        print(tr("Keine KDE-Sitzung erreichbar."), file=sys.stderr)
         return 1
     integrate_panel()
     if not ensure_service(config_dir, state_dir):
         print(
-            "Der Hintergrunddienst konnte nicht starten. Details: desktop-service.log im Time-Machine-Statusordner.",
+            tr("Der Hintergrunddienst konnte nicht starten. Details: desktop-service.log im Time-Machine-Statusordner."),
             file=sys.stderr,
         )
         return 1
@@ -261,7 +267,7 @@ def main(config_dir=None, state_dir=None):
     app.setQuitOnLastWindowClosed(False)
     bus = QDBusConnection.sessionBus()
     if not bus.isConnected():
-        print("Keine D-Bus-Sitzung erreichbar.", file=sys.stderr)
+        print(tr("Keine D-Bus-Sitzung erreichbar."), file=sys.stderr)
         return 1
     if bus.interface().isServiceRegistered(SERVICE).value():
         return 0  # An already running instance owns the service.

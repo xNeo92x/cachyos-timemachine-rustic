@@ -5,6 +5,8 @@ import re
 from PySide6.QtCore import QDate, QTime
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QLineEdit, QSpinBox, QTimeEdit, QWidget
 
+from .i18n import tr
+
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 ALIASES = {
     "hourly": "*-*-* *:00:00",
@@ -58,51 +60,51 @@ class ScheduleEditor(QWidget):
         self.form.setContentsMargins(0, 0, 0, 0)
         self.frequency = QComboBox()
         for title, mode in [
-            ("Nur manuell", "manual"),
-            ("Stündlich", "hourly"),
-            ("Täglich", "daily"),
-            ("Wöchentlich", "weekly"),
-            ("Monatlich", "monthly"),
-            ("Jährlich", "yearly"),
-            ("Benutzerdefiniert (systemd)", "custom"),
+            (tr("Nur manuell"), "manual"),
+            (tr("Stündlich"), "hourly"),
+            (tr("Täglich"), "daily"),
+            (tr("Wöchentlich"), "weekly"),
+            (tr("Monatlich"), "monthly"),
+            (tr("Jährlich"), "yearly"),
+            (tr("Benutzerdefiniert (systemd)"), "custom"),
         ]:
             self.frequency.addItem(title, mode)
-        self.form.addRow("Häufigkeit", self.frequency)
+        self.form.addRow(tr("Häufigkeit"), self.frequency)
         self.time = QTimeEdit(QTime(3, 0))
         self.time.setDisplayFormat("HH:mm")
-        self.form.addRow("Uhrzeit", self.time)
+        self.form.addRow(tr("Uhrzeit"), self.time)
         self.minute = QSpinBox()
         self.minute.setRange(0, 59)
-        self.form.addRow("Minute jeder Stunde", self.minute)
+        self.form.addRow(tr("Minute jeder Stunde"), self.minute)
         self.weekday = QComboBox()
         self.weekday.addItems(
-            ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+            [tr("Montag"), tr("Dienstag"), tr("Mittwoch"), tr("Donnerstag"), tr("Freitag"), tr("Samstag"), tr("Sonntag")]
         )
-        self.form.addRow("Wochentag", self.weekday)
+        self.form.addRow(tr("Wochentag"), self.weekday)
         self.month = QComboBox()
         self.month.addItems(
             [
-                "Januar",
-                "Februar",
-                "März",
+                tr("Januar"),
+                tr("Februar"),
+                tr("März"),
                 "April",
-                "Mai",
-                "Juni",
-                "Juli",
+                tr("Mai"),
+                tr("Juni"),
+                tr("Juli"),
                 "August",
                 "September",
-                "Oktober",
+                tr("Oktober"),
                 "November",
-                "Dezember",
+                tr("Dezember"),
             ]
         )
-        self.form.addRow("Monat", self.month)
+        self.form.addRow(tr("Monat"), self.month)
         self.day = QSpinBox()
         self.day.setRange(1, 31)
-        self.form.addRow("Tag im Monat", self.day)
+        self.form.addRow(tr("Tag im Monat"), self.day)
         self.custom = QLineEdit()
-        self.custom.setPlaceholderText("z. B. Mon..Fri *-*-* 08:00:00")
-        self.form.addRow("Kalenderausdruck", self.custom)
+        self.custom.setPlaceholderText(tr("z. B. Mon..Fri *-*-* 08:00:00"))
+        self.form.addRow(tr("Kalenderausdruck"), self.custom)
         self.note = QLabel()
         self.note.setWordWrap(True)
         self.form.addRow(self.note)
@@ -135,15 +137,15 @@ class ScheduleEditor(QWidget):
         ]:
             widget.setVisible(visible)
             self.form.labelForField(widget).setVisible(visible)
-        note = "Uhrzeiten gelten in der lokalen Zeitzone."
+        note = tr("Uhrzeiten gelten in der lokalen Zeitzone.")
         if mode == "manual":
-            note = "Sicherungen werden nur auf Anfrage gestartet."
+            note = tr("Sicherungen werden nur auf Anfrage gestartet.")
         elif mode == "custom":
-            note = "Bestehende besondere Zeitpläne bleiben unverändert."
+            note = tr("Bestehende besondere Zeitpläne bleiben unverändert.")
         elif mode == "monthly" and self.day.value() > 28:
-            note += " In Monaten ohne diesen Tag entfällt der Lauf."
+            note += tr(" In Monaten ohne diesen Tag entfällt der Lauf.")
         elif mode == "yearly" and self.month.currentIndex() == 1 and self.day.value() == 29:
-            note += " Der 29. Februar kommt nur in Schaltjahren vor."
+            note += tr(" Der 29. Februar kommt nur in Schaltjahren vor.")
         self.note.setText(note)
 
     def set_schedule(self, expression):

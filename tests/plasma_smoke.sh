@@ -32,6 +32,7 @@ source = base / 'source'
 source.mkdir()
 (source / 'file.txt').write_text('Passwordless Plasma backup')
 atomic(Path(os.environ['XDG_CONFIG_HOME']) / 'cachyos-time-machine/config.json', {
+    'language': 'en',
     'source': str(source), 'destinations': [{'name': 'test', 'repository': str(base / 'repo')}],
 })
 PYSETUP
@@ -79,7 +80,7 @@ set -e
 cat "$task_dir/plasma.log"
 python -m timemachine.cli log --dest test
 [[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
-for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE PASSWORDLESS_BACKUP KEY_DIALOG; do
+for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE ENGLISH_UI PASSWORDLESS_BACKUP KEY_DIALOG; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
 if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/(applet|data/plasma/plasmoids/org.cachyos.timemachine)/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then

@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
+from .i18n import tr
+
 
 class NetworkError(RuntimeError):
     pass
@@ -32,7 +34,7 @@ def smb_url(value, *, identity=False):
         ):
             raise ValueError
         if url.password is not None:
-            raise NetworkError("NAS-Passwörter bitte in KDE Wallet speichern, nicht in der SMB-Adresse.")
+            raise NetworkError(tr("NAS-Passwörter bitte in KDE Wallet speichern, nicht in der SMB-Adresse."))
         host = url.hostname.lower()
         if ":" in host:
             host = "[" + host + "]"
@@ -42,7 +44,7 @@ def smb_url(value, *, identity=False):
             host = quote(unquote(url.username), safe=";") + "@" + host
         return urlunsplit(("smb", host, quote(path, safe="/"), "", ""))
     except ValueError as exc:
-        raise NetworkError("Bitte einen NAS-Ordner wählen: smb://server/freigabe/backup-ordner") from exc
+        raise NetworkError(tr("Bitte einen NAS-Ordner wählen: smb://server/freigabe/backup-ordner")) from exc
 
 
 def kio_call(member, value):
@@ -53,7 +55,7 @@ def kio_call(member, value):
     app = QCoreApplication.instance() or QCoreApplication([])
     bus = QDBusConnection.sessionBus()
     if not bus.isConnected():
-        raise NetworkError("NAS-Zugriff benötigt eine laufende KDE-Benutzersitzung (Sitzungs-D-Bus).")
+        raise NetworkError(tr("NAS-Zugriff benötigt eine laufende KDE-Benutzersitzung (Sitzungs-D-Bus)."))
     message = QDBusMessage.createMethodCall(
         "org.kde.KIOFuse", "/org/kde/KIOFuse", "org.kde.KIOFuse.VFS", member
     )
@@ -64,12 +66,11 @@ def kio_call(member, value):
     if reply.type() == QDBusMessage.MessageType.ErrorMessage:
         detail = re.sub(r"(://)[^/@]+@", r"\1***@", reply.errorMessage())
         raise NetworkError(
-            "NAS nicht erreichbar. Freigabe in Dolphin öffnen und Zugang in KDE Wallet speichern. "
-            "Benötigte Pakete: kio-fuse und kio-extras. " + detail
+            tr("NAS nicht erreichbar. Freigabe in Dolphin öffnen und Zugang in KDE Wallet speichern. Benötigte Pakete: kio-fuse und kio-extras. ") + detail
         )
     args = reply.arguments()
     if len(args) != 1 or not isinstance(args[0], str) or not args[0]:
-        raise NetworkError("KDE hat keinen gültigen NAS-Pfad zurückgegeben.")
+        raise NetworkError(tr("KDE hat keinen gültigen NAS-Pfad zurückgegeben."))
     return args[0]
 
 
@@ -100,18 +101,18 @@ def repository_access(repository):
     url = smb_url(repository)
     path = Path(kio_call("mountUrl", url))
     if not path.is_absolute():
-        raise NetworkError("KDE hat keinen absoluten NAS-Pfad zurückgegeben.")
+        raise NetworkError(tr("KDE hat keinen absoluten NAS-Pfad zurückgegeben."))
     fd = None
     try:
         fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         info = Path(f"/proc/self/fdinfo/{fd}").read_text()
         mount_id = re.search(r"^mnt_id:\s*(\d+)$", info, re.MULTILINE)
         if not mount_id or not any(mount_id[1] == ident for ident, _ in kio_mounts()):
-            raise NetworkError("NAS ist nicht als KDE-Netzwerkdateisystem verbunden; Vorgang abgebrochen.")
+            raise NetworkError(tr("NAS ist nicht als KDE-Netzwerkdateisystem verbunden; Vorgang abgebrochen."))
         # Use the inherited directory descriptor, rather than a volatile /run/user path.
         yield f"/proc/self/fd/{fd}", (fd,)
     except OSError as exc:
-        raise NetworkError("NAS-Verzeichnis nicht verfügbar; es wird kein lokales Ersatz-Backup angelegt.") from exc
+        raise NetworkError(tr("NAS-Verzeichnis nicht verfügbar; es wird kein lokales Ersatz-Backup angelegt.")) from exc
     finally:
         if fd is not None:
             os.close(fd)

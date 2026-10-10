@@ -3,8 +3,10 @@
 import logging
 import shutil
 
-from PySide6.QtCore import QObject, QProcess, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
 from PySide6.QtWidgets import QApplication
+
+from .i18n import language, tr
 
 
 class FilePicker(QObject):
@@ -25,9 +27,14 @@ class FilePicker(QObject):
         self.directory = directory
         binary = shutil.which("kdialog")
         if not binary:
-            self.finish([], "Für die KDE-Dateiauswahl bitte installieren: sudo pacman -S kdialog")
+            self.finish([], tr("Für die KDE-Dateiauswahl bitte installieren: sudo pacman -S kdialog"))
             return
         args = ["--title", title]
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("LANGUAGE", language())
+        env.remove("LC_ALL")
+        env.insert("LC_MESSAGES", "de_DE.UTF-8" if language() == "de" else "en_US.UTF-8")
+        self.process.setProcessEnvironment(env)
         if directory:
             args += ["--getexistingdirectory", start]
         else:
@@ -37,14 +44,14 @@ class FilePicker(QObject):
 
     def process_error(self, error):
         if error == QProcess.ProcessError.FailedToStart:
-            self.finish([], "Die KDE-Dateiauswahl konnte nicht gestartet werden. Bitte kdialog prüfen.")
+            self.finish([], tr("Die KDE-Dateiauswahl konnte nicht gestartet werden. Bitte kdialog prüfen."))
 
     def finished(self, code, status):
         if self.cancelled:
             self.finish([], "")
         elif status == QProcess.ExitStatus.CrashExit or code not in (0, 1):
             logging.getLogger("timemachine").error("kdialog failed: exit=%s status=%s", code, status.name)
-            self.finish([], "Die KDE-Dateiauswahl wurde unerwartet beendet. Deine Eingaben bleiben erhalten.")
+            self.finish([], tr("Die KDE-Dateiauswahl wurde unerwartet beendet. Deine Eingaben bleiben erhalten."))
         elif code == 1:
             self.finish([], "")  # KDE uses 1 for the user's Cancel button.
         else:
@@ -55,7 +62,7 @@ class FilePicker(QObject):
                     raise ValueError("multiline path")
                 self.finish(paths, "")
             except (UnicodeError, ValueError):
-                self.finish([], "Die Dateiauswahl hat einen ungültigen Pfad zurückgegeben.")
+                self.finish([], tr("Die Dateiauswahl hat einen ungültigen Pfad zurückgegeben."))
 
     def finish(self, paths, error):
         if self.done:

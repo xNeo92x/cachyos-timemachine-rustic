@@ -84,7 +84,7 @@ def main():
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
-    for name in ("README.md", "LICENSE"):
+    for name in ("README.md", "README.en.md", "LICENSE"):
         shutil.copy2(root / name, app_dir / name)
     launcher.parent.mkdir(parents=True, exist_ok=True)
     # Python path is absolute so both desktop entries and systemd work outside the checkout.

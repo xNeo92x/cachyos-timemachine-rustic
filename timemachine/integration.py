@@ -42,6 +42,7 @@ def set_autostart(enabled, launcher=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "[Desktop Entry]\nType=Application\nName=CachyOS Time Machine\n"
+        + "Comment=Start the backup service when logging into KDE\n"
         + "Comment[de]=Backup-Dienst bei der KDE-Anmeldung starten\nExec="
         + desktop_arg(launcher or launcher_path())
         + " service\nIcon=cachyos-time-machine\nTerminal=false\nOnlyShowIn=KDE;\n"

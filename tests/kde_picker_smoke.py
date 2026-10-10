@@ -183,6 +183,17 @@ force user = {getpass.getuser()}
                 window.settings()
                 assert str(file) in window.settings_dialog.sources.toPlainText().splitlines()
                 window.settings_dialog.reject()
+                for code, expected in (("de", "Jetzt sichern"), ("en", "Back up now")):
+                    window.settings()
+                    settings = window.settings_dialog
+                    sources = settings.sources.toPlainText()
+                    repository = settings.fields["repository"].text()
+                    settings.language.setCurrentIndex(settings.language.findData(code))
+                    settings.save()
+                    assert window.backup_button.text() == expected
+                    assert window.engine.dest("nas")["repository"] == repository
+                    assert window.engine.config["source"] == sources.splitlines()
+                print("KDE_NATIVE_LANGUAGE_SWITCH_OK platform=" + QApplication.platformName(), flush=True)
                 window.key_menu("nas")
                 wait(lambda: window.key_dialog is not None and window.key_dialog.isVisible())
                 assert "optional" in window.key_dialog.explanation.text()

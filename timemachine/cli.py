@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from .core import Engine, Error
+from .i18n import tr
 
 
 def parser():
@@ -85,10 +86,10 @@ def main(argv=None):
         elif cmd == "key":
             if args.action == "set":
                 password = (
-                    sys.stdin.readline().rstrip("\n") if args.stdin else getpass.getpass("Backup-Passwort: ")
+                    sys.stdin.readline().rstrip("\n") if args.stdin else getpass.getpass(tr("Backup-Passwort: "))
                 )
-                if not args.stdin and getpass.getpass("Wiederholen: ") != password:
-                    raise Error("Passwörter stimmen nicht überein.")
+                if not args.stdin and getpass.getpass(tr("Wiederholen: ")) != password:
+                    raise Error(tr("Passwörter stimmen nicht überein."))
                 engine.set_key(args.dest, password)
             elif args.action == "show":
                 print(engine.show_key(args.dest))
