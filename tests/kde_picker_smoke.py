@@ -114,13 +114,17 @@ force user = {getpass.getuser()}
                 def choose(settings, value, directory=True):
                     picker = settings.file_picker
                     wait(lambda: chooser_visible(picker.process.processId()))
+                    QTest.qWait(750)  # Native helper finishes its initial directory/listing setup.
                     # The Name field is independent of the navigation bar. Typing
                     # only into Ctrl+L retains the previous selected filename.
                     entered = value if directory else '"' + value + '"'
                     if wayland:
-                        keys("-M", "alt", "-k", "n", "-m", "alt")
-                        keys("-M", "ctrl", "-k", "a", "-m", "ctrl", "--", entered)
-                        keys("-M", "alt", "-k", "o", "-m", "alt")
+                        subprocess.run(["swaymsg", f"[pid={picker.process.processId()}] focus"], check=True)
+                        # One keyboard/keymap for the complete sequence, with time
+                        # for Qt to process focus and shortcut changes between keys.
+                        keys("-s", "100", "-M", "alt", "-k", "n", "-m", "alt", "-s", "100",
+                             "-M", "ctrl", "-k", "a", "-m", "ctrl", "-s", "100", "-d", "5",
+                             entered, "-s", "150", "-M", "alt", "-k", "o", "-m", "alt", "-s", "100")
                     else:
                         wid = chooser_visible(picker.process.processId())[-1]
                         subprocess.run(["xdotool", "windowactivate", "--sync", wid,
