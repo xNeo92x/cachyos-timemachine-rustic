@@ -51,6 +51,7 @@ smb ports = 1445
 interfaces = 127.0.0.1
 bind interfaces only = yes
 map to guest = Bad User
+guest account = {getpass.getuser()}
 log file = {samba}/log.%m
 pid directory = {samba}
 lock directory = {samba}
@@ -112,22 +113,19 @@ force user = {getpass.getuser()}
                 def choose(settings, value, directory=True):
                     picker = settings.file_picker
                     wait(lambda: chooser_visible(picker.process.processId()))
+                    # The Name field is independent of the navigation bar. Typing
+                    # only into Ctrl+L retains the previous selected filename.
+                    entered = value if directory else '"' + value + '"'
                     if wayland:
-                        # The newly mapped child receives focus from Sway.
-                        keys("-M", "ctrl", "-k", "l", "-m", "ctrl", "--", value)
-                        keys("-k", "Return")
+                        keys("-M", "alt", "-k", "n", "-m", "alt")
+                        keys("-M", "ctrl", "-k", "a", "-m", "ctrl", "--", entered)
+                        keys("-M", "alt", "-k", "o", "-m", "alt")
                     else:
                         wid = chooser_visible(picker.process.processId())[-1]
-                        subprocess.run(["xdotool", "windowactivate", "--sync", wid, "key", "--clearmodifiers", "ctrl+l"], check=True)
-                        subprocess.run(["xdotool", "type", "--clearmodifiers", "--", value], check=True)
-                        subprocess.run(["xdotool", "key", "--clearmodifiers", "Return"], check=True)
-                    # Location entry navigates to the directory, then Open accepts it.
-                    QTest.qWait(1500)
-                    if settings.file_picker is not None:
-                        if wayland:
-                            keys("-M", "alt", "-k", "o", "-m", "alt")
-                        else:
-                            subprocess.run(["xdotool", "key", "--clearmodifiers", "alt+o"], check=True)
+                        subprocess.run(["xdotool", "windowactivate", "--sync", wid,
+                                        "key", "--clearmodifiers", "alt+n", "ctrl+a"], check=True)
+                        subprocess.run(["xdotool", "type", "--clearmodifiers", "--", entered], check=True)
+                        subprocess.run(["xdotool", "key", "--clearmodifiers", "alt+o"], check=True)
                     try:
                         wait(lambda: settings.file_picker is None)
                     except AssertionError:

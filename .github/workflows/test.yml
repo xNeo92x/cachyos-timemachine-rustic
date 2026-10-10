@@ -67,6 +67,8 @@ jobs:
         if: always()
         run: |
           useradd --create-home picker-test
+          # Container capability bounding sets cannot grant Sway's packaged CAP_SYS_NICE.
+          if [ -n "$(getcap "$(command -v sway)")" ]; then setcap -r "$(command -v sway)"; fi
           chmod -R a+rX "$GITHUB_WORKSPACE"
           runuser -u picker-test -- dbus-run-session -- bash tests/wayland_picker_smoke.sh
   nas:
