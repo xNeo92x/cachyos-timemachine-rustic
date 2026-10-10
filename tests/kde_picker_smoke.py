@@ -1,5 +1,6 @@
 """Exercise native KDE Open/Save/Cancel buttons, including a real SMB directory."""
 
+import base64
 import getpass
 import json
 import os
@@ -127,7 +128,21 @@ force user = {getpass.getuser()}
                             keys("-M", "alt", "-k", "o", "-m", "alt")
                         else:
                             subprocess.run(["xdotool", "key", "--clearmodifiers", "alt+o"], check=True)
-                    wait(lambda: settings.file_picker is None)
+                    try:
+                        wait(lambda: settings.file_picker is None)
+                    except AssertionError:
+                        print("PICKER_TIMEOUT value=" + value, flush=True)
+                        print(bytes(picker.process.readAllStandardError()).decode(errors="replace"), flush=True)
+                        image = base / "picker.png"
+                        if wayland:
+                            subprocess.run(["grim", str(image)], check=True)
+                            print(subprocess.check_output(["swaymsg", "-t", "get_tree"], text=True), flush=True)
+                        else:
+                            app.primaryScreen().grabWindow(0).save(str(image))
+                        print("PICKER_SCREENSHOT=" + base64.b64encode(image.read_bytes()).decode(), flush=True)
+                        picker.cancel()
+                        wait(lambda: settings.file_picker is None)
+                        raise
                     assert not errors, errors
                     assert settings.isVisible() and settings.isEnabled(), "Open closed Settings"
 
