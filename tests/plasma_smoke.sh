@@ -95,7 +95,7 @@ set -e
 cat "$task_dir/plasma.log"
 python -m timemachine.cli log --dest test
 [[ "$result" == 124 ]] # The shell must stay alive, rather than exit or crash.
-for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE LOCALIZED_UI LIVE_PROGRESS COMPACT_LAYOUT PASSWORDLESS_BACKUP ACTION_MENU KEY_DIALOG; do
+for marker in APPLET TRAY POPUP STATUS ICON CLICK CLOSE ACTIVATE LOCALIZED_UI LIVE_PROGRESS COMPACT_LAYOUT NAS_METRICS_LAYOUT PASSWORDLESS_BACKUP ACTION_MENU KEY_DIALOG; do
   rg "TIMEMACHINE_${marker}_READY" "$task_dir/plasma.log"
 done
 if rg "TIMEMACHINE_TEST_FAILED|file://$task_dir/(applet|data/plasma/plasmoids/org.cachyos.timemachine)/contents/ui/main.qml:[0-9]+|Type .* unavailable|Error loading applet" "$task_dir/plasma.log"; then

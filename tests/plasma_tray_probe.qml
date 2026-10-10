@@ -2,6 +2,7 @@
 // Exercise KDE's real tray delegate and popup container, not a desktop widget.
 TestEvent { id: trayInput }
 Timer {
+    id: trayProbe
     interval: 500
     repeat: true
     running: true
@@ -10,6 +11,16 @@ Timer {
     property var tray: null
     property bool progressObserved: false
     property string expectedLanguage: "en"
+    property Timer nasLayoutTimer: Timer {
+        interval: 100
+        onTriggered: {
+            const popup = root.fullRepresentationItem;
+            ["backupLiveProgressBar", "backupLiveProgressDetails", "backupLiveProgressSpeed", "backupLiveProgressTiming"].forEach(name => trayProbe.fullyVisible(trayProbe.findButton(popup, name)));
+            trayProbe.checkButtons();
+            console.info("TIMEMACHINE_NAS_METRICS_LAYOUT_READY");
+            trayProbe.findButton(popup, "backupLiveProgressSpeed").text = Qt.binding(() => root.selected.progress_view.speed);
+        }
+    }
 
     function check(condition, message) {
         if (!condition)
@@ -124,6 +135,15 @@ Timer {
                       "live source processing rate visible");
                 [bar, detail, speed, timing].forEach(item => fullyVisible(item));
                 checkButtons();
+                // Geometry fixture for SMB's additional line. Native counters
+                // above still come from the real local rustic backup.
+                speed.text = live.speed + "\n" + root.tr("Repository-Schreiben: {p0}").replace("{p0}", "0.0 B/s");
+                // Let the layout settle before inspecting the additional line.
+                if (!progressObserved) {
+                    nasLayoutTimer.start();
+                } else {
+                    speed.text = Qt.binding(() => root.selected.progress_view.speed);
+                }
                 if (!progressObserved) {
                     console.info("TIMEMACHINE_LIVE_PROGRESS_READY");
                     console.info("TIMEMACHINE_COMPACT_LAYOUT_READY");
