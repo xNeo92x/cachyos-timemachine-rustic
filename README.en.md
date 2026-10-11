@@ -77,6 +77,9 @@ changing language does not require logging out. The preference survives restarts
 Custom destination names, paths, exclusion patterns and schedules are preserved.
 Existing logs and messages emitted by rustic itself keep their original language.
 
+Installation guides: [CachyOS KDE](#installing-on-cachyos-kde) ·
+[Fedora / Nobara KDE](#installing-on-fedora--nobara-kde) · [Kubuntu](#installing-on-kubuntu)
+
 ## Installing on CachyOS KDE
 
 Requires KDE **Plasma >= 6.3**, Kirigami, Python >= 3.11, Qt/PySide6 >= 6.6,
@@ -133,6 +136,74 @@ makepkg -si
 After package installation, add the applet or run `cachyos-time-machine gui`,
 then enable autostart in the popup. A PKGBUILD is included; this does not imply
 that the package has been published to the AUR.
+
+## Installing on Fedora / Nobara KDE
+
+Use the **KDE edition** of Fedora or Nobara with **Plasma >= 6.3**.
+This user-local installation uses the distribution's native Qt and PySide6
+packages. Fedora/Nobara calls the package
+[`python3-pyside6`](https://packages.fedoraproject.org/pkgs/python-pyside6/python3-pyside6/).
+
+```bash
+sudo dnf install python3 python3-pyside6 libnotify git curl tar coreutils plasma-workspace kf6-kirigami kio-fuse kio-extras kdialog &&
+git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
+cd cachyos-timemachine-rustic &&
+bash packaging/install-rustic.sh &&
+python3 install.py &&
+~/.local/bin/cachyos-time-machine gui
+```
+
+The first command installs dependencies. The rustic helper and user-local
+installation are [explained below](#rustic-and-user-local-installation-on-fedoranobara-and-kubuntu).
+For an existing checkout, use `git pull --ff-only` instead of `git clone` and
+the following directory change.
+
+## Installing on Kubuntu
+
+These instructions target **Kubuntu 26.04 LTS or newer** with **Plasma >= 6.3**.
+[Kubuntu 26.04](https://kubuntu.org/news/kubuntu-26-04-release-notes/) ships Plasma 6.6.
+Kubuntu 24.04's standard Plasma 5 desktop cannot load the native Plasma 6 applet.
+
+Kubuntu splits PySide6 into multiple packages. This application needs
+[`python3-pyside6.qtwidgets`](https://packages.ubuntu.com/resolute/python3-pyside6.qtwidgets)
+and [`python3-pyside6.qtdbus`](https://packages.ubuntu.com/resolute/python3-pyside6.qtdbus);
+QtCore and QtGui are installed as dependencies.
+
+```bash
+sudo apt update &&
+sudo apt install python3 python3-pyside6.qtwidgets python3-pyside6.qtdbus libnotify-bin git curl tar coreutils plasma-workspace qml6-module-org-kde-kirigami kio-fuse kio-extras kdialog &&
+git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
+cd cachyos-timemachine-rustic &&
+bash packaging/install-rustic.sh &&
+python3 install.py &&
+~/.local/bin/cachyos-time-machine gui
+```
+
+Some packages come from **Universe**, which Kubuntu normally enables by default.
+If you disabled it, enable it with `sudo add-apt-repository universe` and run
+`sudo apt update` again. For an existing checkout, use `git pull --ff-only`
+instead of `git clone` and the following directory change.
+
+### rustic and user-local installation on Fedora/Nobara and Kubuntu
+
+`bash packaging/install-rustic.sh` retains an existing rustic version **>= 0.11.4**.
+Otherwise it downloads the tested
+**[rustic 0.11.4](https://github.com/rustic-rs/rustic/releases/tag/v0.11.4)** from
+the official project, verifies the pinned **SHA-256 checksum**, and installs only
+the verified executable to `/usr/local/bin/rustic`. Supported architectures are
+**x86_64** and **ARM64/aarch64**. Only copying into this system directory may
+require sudo. For other architectures, install rustic using its
+[official installation guide](https://rustic.cli.rs/docs/installation/).
+
+Then run `python3 install.py` **without sudo** in your logged-in KDE session.
+It sets up the same Plasma popup, application menu entry, D-Bus activation and
+toggleable KDE autostart as on CachyOS. The systemd schedules and SMB access through
+KDE Wallet/KIO-FUSE are also available. The app is installed for your user;
+no RPM or DEB package is built. These methods need no global `pip install`.
+
+To update, run `git pull --ff-only` and `python3 install.py` in the checkout.
+Then log out of KDE and back in so Plasma and the background service load the
+new version. Wait for any running backup to finish before updating.
 
 ## First backup
 

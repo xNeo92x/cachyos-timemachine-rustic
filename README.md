@@ -82,6 +82,9 @@ eine erneute Anmeldung ist für den Sprachwechsel nicht nötig. Die Auswahl blei
 werden nicht übersetzt oder verändert. Bereits vorhandene Protokolle und von
 rustic selbst ausgegebene Meldungen bleiben in ihrer ursprünglichen Sprache.
 
+Installationsanleitungen: [CachyOS KDE](#installation-auf-cachyos-kde) ·
+[Fedora / Nobara KDE](#installation-auf-fedora--nobara-kde) · [Kubuntu](#installation-auf-kubuntu)
+
 ## Installation auf CachyOS KDE
 
 Benötigt KDE **Plasma >= 6.3**, Kirigami, Python >= 3.11, Qt/PySide6 >= 6.6
@@ -140,6 +143,77 @@ Bei Paketinstallation das Miniprogramm hinzufügen oder `cachyos-time-machine gu
 ausführen; Autostart im Popup einschalten.
 Das PKGBUILD ist im Repository enthalten; eine Veröffentlichung im AUR ist damit
 nicht verbunden.
+
+## Installation auf Fedora / Nobara KDE
+
+Verwende die **KDE-Ausgabe** von Fedora oder Nobara mit **Plasma >= 6.3**.
+Die folgende Benutzerinstallation nutzt die nativen Distributionspakete für Qt
+und PySide6. Unter Fedora/Nobara heißt das Paket
+[`python3-pyside6`](https://packages.fedoraproject.org/pkgs/python-pyside6/python3-pyside6/).
+
+```bash
+sudo dnf install python3 python3-pyside6 libnotify git curl tar coreutils plasma-workspace kf6-kirigami kio-fuse kio-extras kdialog &&
+git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
+cd cachyos-timemachine-rustic &&
+bash packaging/install-rustic.sh &&
+python3 install.py &&
+~/.local/bin/cachyos-time-machine gui
+```
+
+Der erste Befehl installiert die Abhängigkeiten. Das rustic-Hilfsskript und die
+Benutzerinstallation sind [unten erläutert](#rustic-und-benutzerinstallation-auf-fedoranobara-und-kubuntu).
+Bei einem bereits vorhandenen Checkout genügt `git pull --ff-only` anstelle
+von `git clone` und der anschließenden Verzeichniswahl.
+
+## Installation auf Kubuntu
+
+Diese Anleitung richtet sich an **Kubuntu 26.04 LTS oder neuer** mit
+**Plasma >= 6.3**. [Kubuntu 26.04](https://kubuntu.org/news/kubuntu-26-04-release-notes/)
+liefert Plasma 6.6. Die Standardinstallation von Kubuntu 24.04 mit Plasma 5
+kann das native Plasma-6-Miniprogramm nicht laden.
+
+Kubuntu verteilt PySide6 auf mehrere Pakete. Für diese Anwendung werden
+[`python3-pyside6.qtwidgets`](https://packages.ubuntu.com/resolute/python3-pyside6.qtwidgets)
+und [`python3-pyside6.qtdbus`](https://packages.ubuntu.com/resolute/python3-pyside6.qtdbus)
+benötigt; QtCore und QtGui werden als Abhängigkeiten mitinstalliert.
+
+```bash
+sudo apt update &&
+sudo apt install python3 python3-pyside6.qtwidgets python3-pyside6.qtdbus libnotify-bin git curl tar coreutils plasma-workspace qml6-module-org-kde-kirigami kio-fuse kio-extras kdialog &&
+git clone https://github.com/xNeo92x/cachyos-timemachine-rustic.git &&
+cd cachyos-timemachine-rustic &&
+bash packaging/install-rustic.sh &&
+python3 install.py &&
+~/.local/bin/cachyos-time-machine gui
+```
+
+Einige Pakete stammen aus **Universe**, das unter Kubuntu normalerweise bereits
+aktiviert ist. Falls diese Paketquelle deaktiviert wurde, aktiviere sie mit
+`sudo add-apt-repository universe` und führe `sudo apt update` erneut aus.
+Bei einem bereits vorhandenen Checkout verwende `git pull --ff-only` statt
+`git clone` und der anschließenden Verzeichniswahl.
+
+### rustic und Benutzerinstallation auf Fedora/Nobara und Kubuntu
+
+`bash packaging/install-rustic.sh` verwendet eine vorhandene rustic-Version
+**>= 0.11.4** weiter. Andernfalls lädt es die getestete Version
+**[rustic 0.11.4](https://github.com/rustic-rs/rustic/releases/tag/v0.11.4)** direkt
+vom offiziellen Projekt, prüft die fest hinterlegte **SHA-256-Prüfsumme** und
+installiert nur das geprüfte Programm nach `/usr/local/bin/rustic`. Unterstützt
+werden **x86_64** und **ARM64/aarch64**. Nur das Kopieren in dieses Systemverzeichnis
+benötigt gegebenenfalls sudo. Für weitere Architekturen installiere rustic
+über dessen [offizielle Installationsanleitung](https://rustic.cli.rs/docs/installation/).
+
+`python3 install.py` läuft anschließend **ohne sudo** in deiner angemeldeten
+KDE-Sitzung. Es richtet dasselbe Plasma-Popup, den Menüeintrag, die D-Bus-Aktivierung
+und den schaltbaren KDE-Autostart wie unter CachyOS ein. Die systemd-Zeitpläne
+und der SMB-Zugriff über KDE Wallet/KIO-FUSE sind ebenfalls verfügbar.
+Die Anwendung wird für deinen Benutzer installiert; es wird kein RPM- oder DEB-Paket erstellt.
+Ein globales `pip install` ist für diese Methoden nicht nötig.
+
+Updates erfolgen im Checkout mit `git pull --ff-only` und `python3 install.py`.
+Anschließend bei KDE ab- und wieder anmelden, damit Plasma und Hintergrunddienst
+die neue Version laden. Warte vor dem Update, bis eine laufende Sicherung beendet ist.
 
 ## Erste Sicherung
 

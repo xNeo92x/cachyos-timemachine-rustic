@@ -265,7 +265,7 @@ EN = {
     "KDE hat keinen absoluten NAS-Pfad zurückgegeben.": "KDE did not return an absolute NAS path.",
     "NAS ist nicht als KDE-Netzwerkdateisystem verbunden; Vorgang abgebrochen.": "NAS is not connected as a KDE network filesystem; operation cancelled.",
     "NAS-Verzeichnis nicht verfügbar; es wird kein lokales Ersatz-Backup angelegt.": "NAS folder is unavailable; no local replacement backup will be created.",
-    "Für die KDE-Dateiauswahl bitte installieren: sudo pacman -S kdialog": "For KDE file selection, please install: sudo pacman -S kdialog",
+    "Für die KDE-Dateiauswahl bitte kdialog installieren; siehe README.": "For KDE file selection, please install kdialog; see the README.",
     "Die KDE-Dateiauswahl konnte nicht gestartet werden. Bitte kdialog prüfen.": "Could not start KDE file selection. Please check kdialog.",
     "Die KDE-Dateiauswahl wurde unerwartet beendet. Deine Eingaben bleiben erhalten.": "KDE file selection closed unexpectedly. Your input is preserved.",
     "Die Dateiauswahl hat einen ungültigen Pfad zurückgegeben.": "File selection returned an invalid path.",

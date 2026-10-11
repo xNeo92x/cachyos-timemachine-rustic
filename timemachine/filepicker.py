@@ -27,7 +27,7 @@ class FilePicker(QObject):
         self.directory = directory
         binary = shutil.which("kdialog")
         if not binary:
-            self.finish([], tr("Für die KDE-Dateiauswahl bitte installieren: sudo pacman -S kdialog"))
+            self.finish([], tr("Für die KDE-Dateiauswahl bitte kdialog installieren; siehe README."))
             return
         args = ["--title", title]
         env = QProcessEnvironment.systemEnvironment()
