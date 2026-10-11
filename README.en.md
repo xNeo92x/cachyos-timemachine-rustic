@@ -573,3 +573,10 @@ backup repositories are retained. The system tray entry, separate panel applet
 and application autostart entry are removed.
 
 MIT. Attribution and technical porting details: [docs/UPSTREAM.md](docs/UPSTREAM.md).
+
+## Acknowledgements
+
+Thank you to the [rustic](https://github.com/rustic-rs/rustic) team for the backup
+functionality, and to
+[Omarchy Time Machine](https://github.com/jankeesvw/omarchy-time-machine) for the
+idea and inspiration behind this project.

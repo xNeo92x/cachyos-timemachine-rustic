@@ -596,3 +596,10 @@ Protokolle und die Backup-Repositories bleiben erhalten. Der Eintrag im Systemab
 Leisten-Miniprogramm und der eigene Autostart-Eintrag werden entfernt.
 
 MIT. Herkunft und technische Portierungsdetails: [docs/UPSTREAM.md](docs/UPSTREAM.md).
+
+## Danksagung
+
+Vielen Dank an das Team von [rustic](https://github.com/rustic-rs/rustic) für die
+Grundlage der Sicherungsfunktionen sowie an
+[Omarchy Time Machine](https://github.com/jankeesvw/omarchy-time-machine) für die
+Idee und Inspiration zu diesem Projekt.
